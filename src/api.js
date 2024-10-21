@@ -1,8 +1,12 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const cors = require('cors');
 const app = express();
 const port = 3000;
+
+// Enable CORS for all routes
+app.use(cors());
 
 // Read the initial state JSON file
 const initialStateFile = path.join(__dirname, 'data', 'initialState.json');
@@ -16,6 +20,11 @@ app.get('/', (req, res) => {
 // Status page route
 app.get('/status', (req, res) => {
   res.json({ status: 'OK' });
+});
+
+// Endpoint to fetch all data
+app.get('/data', (req, res) => {
+  res.json(initialState);
 });
 
 // Create dynamic endpoints for each key in the initial state
