@@ -1,4 +1,128 @@
 {
+  "bddTests": [
+    {
+      "id": "1",
+      "Feature": "Data Flow",
+      "Scenario": "the app loads",
+      "When": "the data is fetched from the initialState.json file through the api slice using RTK Query, automatically cached in the Redux store",
+      "Then": "components access this data through their respective slices. Actions are dispatched for user interactions, with reducers updating the store accordingly",
+      "Given": "a user is loads the app"
+    },
+    {
+      "id": "2",
+      "Feature": "Navbar",
+      "Scenario": "Navbar loads",
+      "When": "the navbar is loaded",
+      "Then": "the navbar is displayed with the brand name, home button and status page button, theme download and load button, and theme toggle button",
+      "Given": "a user is loads the app"
+    },
+    {
+      "id": "3",
+      "Feature": "body",
+      "Scenario": "body loads",
+      "When": "the body is loaded",
+      "Then": "the body is displayed with the content of the page",
+      "Given": "a user is loads the app"
+    },
+    {
+      "id": "4",
+      "Feature": "Custom Theme template download",
+      "Scenario": "User downloads a custom theme",
+      "When": "the user clicks the 'Download Custom Theme' button",
+      "Then": "the custom theme is downloaded to the user's device",
+      "Given": "a user has a custom CSS file for a theme"
+    },
+    {
+      "id": "5",
+      "Feature": "Custom Theme Load",
+      "Scenario": "User loads a custom theme",
+      "Given": "a user has a custom CSS file for a theme",
+      "When": "the user clicks the 'Load Custom Theme' button",
+      "Then": "the custom theme is applied to the application"
+    },
+    {
+      "id": "6",
+      "Feature": "Theme Toggle",
+      "Scenario": "the app loads",
+      "Given": "the app has multiple themes in the src/styles/themes directory",
+      "When": "the app dynamically loads the themes from the src/styles/themes directory",
+      "Then": "the app loads the themes in the theme toggle button"
+    },
+    {
+      "id": "7",
+      "Feature": "Theme Toggle",
+      "Scenario": "User toggles between themes",
+      "Given": "the app has multiple themes available",
+      "When": "the user clicks the Theme Toggle button",
+      "Then": "the app switches to the next available theme in the dynamicly list loaded from the src/styles/themes directory"
+    }
+  ],
   "brandName": "Portfolio.sdin.dev",
-  "description": "Expo Go and RTK Developer"
+  "description": "Expo Go and RTK Developer",
+  "iniTheme": "mirage",
+  "portfolioFeatures": [
+    {
+      "id": "1",
+      "title": "Redux Web and Native Application Development",
+      "description": "I develop custom Redux web and native applications using the latest Expo and React Native technologies. I use RTK Query for data fetching and Redux Toolkit for state management."
+    },
+    {
+      "id": "2",
+      "title": "UX and UI Development",
+      "description": "I develop custom UX and UI designs for web and mobile applications."
+    }
+  ],
+  "appProcedures": [
+    {
+      "id": "1",
+      "title": "Data Flow and Logic",
+      "description": "No hardcoded data is to live in component or slice files. Data is fetched from the API and stored in the Redux store. The data is then used by the components through their respective slices and reducers. https://redux.js.org/style-guide/#put-as-much-logic-as-possible-in-reducers"
+    },
+    {
+      "id": "2",
+      "title": "Theming",
+      "description": "Theming is implemented using the Tamagui library. The theme is stored in the Redux store and is used by the components. Theme files are located in the src/styles/themes directory using a theme-<themeName>.css naming convention. There is a theme toggle button in the navigation bar that allows the user to switch between themes that are dynamically loaded from the src/styles/themes directory. There is a theme template download button and theme load button for loading custom themes."
+    },
+    {
+      "id": "3",
+      "title": "Routing",
+      "description": "Routing is implemented using the Expo Router library. The routing is stored in the Redux store and is used by the components."
+    },
+    {
+      "id": "4",
+      "title": "Data",
+      "description": "The data flow should be json > api slice > store > * slice > * component. Example: json > api slice > store > nav slice > nav component. Interfaces are used to define the data types and stored in the interfaces.ts file"
+    },
+    {
+      "id": "1",
+      "title": "bdd gherkin example",
+      "description": "Feature: Guess the word
+
+        # The first example has two steps
+        Scenario: Maker starts a game
+          When the Maker starts a game
+          Then the Maker waits for a Breaker to join
+
+        # The second example has three steps
+        Scenario: Breaker joins a game
+          Given the Maker has started a game with the word 'silky'
+          When the Breaker joins the Maker's game
+          Then the Breaker must guess a word with 5 characters"
+    }
+  ],
+  "themeToggle": {
+    "mode": "",
+    "themes": [],
+    "status": "idle",
+    "error": null
+  },
+  "nav": {
+    "brandName": ""
+  },
+  "brandNameLoading": {
+    "isLoading": true
+  },
+  "themeCustom": {
+    "customThemeName": null
+  }
 }
