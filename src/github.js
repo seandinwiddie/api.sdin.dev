@@ -87,6 +87,7 @@ const normalizeRepo = (raw) => ({
   stars: raw.stargazers_count,
   forks: raw.forks_count,
   topics: raw.topics || [],
+  createdAt: raw.created_at,
   htmlUrl: raw.html_url,
   homepage: raw.homepage,
   pushedAt: raw.pushed_at,
@@ -134,7 +135,16 @@ const loadRepos = async () => {
     .reduce((acc, repo) => ({ ...acc, [repo.id]: repo }), {});
 
   const repos = Object.values(byId).sort(byMostRecentlyPushed);
-  return { repos, languages: languageBreakdown(repos), owners: ownerBreakdown(repos) };
+  return {
+    repos,
+    languages: languageBreakdown(repos),
+    owners: ownerBreakdown(repos),
+    // Earliest repository creation: the first dated trace of public work.
+    since: repos.reduce(
+      (earliest, r) => (!earliest || r.createdAt < earliest ? r.createdAt : earliest),
+      null
+    ),
+  };
 };
 
 /** Owner -> repo count, so the UI can show org work separately from personal. */
@@ -250,6 +260,7 @@ const getSummary = async () => {
     repos: repos.repos,
     languages: repos.languages,
     owners: repos.owners,
+    since: repos.since,
     activity,
     // null when the calendar could not be obtained; the UI omits it.
     contributions: contributions.contributions,

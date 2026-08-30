@@ -127,7 +127,7 @@ describe('github aggregation', () => {
     const summary = await getSummary();
     assert.deepEqual(
       Object.keys(summary).sort(),
-      ['activity', 'authenticated', 'cached', 'commits', 'contributions', 'languages', 'owners', 'profile', 'repos']
+      ['activity', 'authenticated', 'cached', 'commits', 'contributions', 'languages', 'owners', 'profile', 'repos', 'since']
     );
     assert.equal(typeof summary.authenticated, 'boolean');
   });
