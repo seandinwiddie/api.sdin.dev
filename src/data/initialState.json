@@ -113,5 +113,78 @@
   },
   "themeCustom": {
     "customThemeName": null
+  },
+  "about": {
+    "headline": "I build systems that think locally.",
+    "statement": "Twelve years of shipping, most of it spent on the awkward seams: game engines that need to reason without a network, one codebase that has to be native on three platforms, and functional cores that keep their shape whether they are written in TypeScript, C++ or Haskell.",
+    "domains": [
+      {
+        "id": "1",
+        "title": "Local-first neuro-symbolic AI",
+        "summary": "NPC engines that reason on the player's machine \u2014 no round trip, no rented inference.",
+        "detail": "ForbocAI builds dialogue, memory-aware interaction and validated action for game worlds, shipped as an Unreal Engine SDK with a visual authoring studio and a hosted API behind it.",
+        "repos": [
+          "ForbocAI/sdk-ue-5",
+          "ForbocAI/demo-ue-5",
+          "ForbocAI/studio",
+          "ForbocAI/Platform"
+        ]
+      },
+      {
+        "id": "2",
+        "title": "Functional cores, four languages deep",
+        "summary": "The same algebra \u2014 Maybe, Either, folds, dispatch tables \u2014 ported rather than reinvented.",
+        "detail": "A cyber-noir MUD written entirely in Vimscript on a pure functional architecture, API templates in Haskell, and an Unreal SDK whose data boundaries are composed rather than branched.",
+        "repos": [
+          "seandinwiddie/vim-game",
+          "seandinwiddie/app-template-api-haskell",
+          "ForbocAI/sdk-ue-5"
+        ]
+      },
+      {
+        "id": "3",
+        "title": "Universal applications",
+        "summary": "One Expo codebase that is genuinely native on iOS and Android, and static on the web.",
+        "detail": "Redux Toolkit for state, RTK Query for the server cache, Tamagui for a design system that compiles to both. This site is the reference implementation \u2014 read its source, then scan the QR.",
+        "repos": [
+          "seandinwiddie/portfolio",
+          "seandinwiddie/api.sdin.dev",
+          "seandinwiddie/app-template"
+        ]
+      },
+      {
+        "id": "4",
+        "title": "Automation that removes a job, not a step",
+        "summary": "Pipelines that take a brief in and hand finished work back.",
+        "detail": "Campaign briefs resolved into multi-format creative through generative imaging, disposable telephony with numbers released the moment a message lands, and agent skills for legal workflows.",
+        "repos": [
+          "seandinwiddie/ad-campaigns-automation",
+          "seandinwiddie/disposable-number",
+          "seandinwiddie/legal-skill"
+        ]
+      }
+    ],
+    "principles": [
+      {
+        "id": "1",
+        "title": "Composition over branching",
+        "description": "Route by shape or by key. A dispatch table beats a ternary chain, and a fold beats a loop."
+      },
+      {
+        "id": "2",
+        "title": "Reducers stay pure",
+        "description": "Effects live at the edges \u2014 RTK Query for server cache, listeners for reactive work."
+      },
+      {
+        "id": "3",
+        "title": "Local-first by default",
+        "description": "A dead network should degrade an experience, never end it. This site still renders with its API blocked."
+      },
+      {
+        "id": "4",
+        "title": "Evidence over assertion",
+        "description": "Every claim on this page links to the repository that backs it."
+      }
+    ]
   }
 }
