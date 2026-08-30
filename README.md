@@ -1,50 +1,52 @@
 # api.sdin.dev
 
-This project is an Express.js-based API for my portfolio.
+Express.js API serving portfolio content for [portfolio.sdin.dev](https://portfolio.sdin.dev).
 
 ## Description
 
-This is an Express.js-based API for a portfolio website. It serves as the backend for fetching and providing data to the frontend application.
+Content lives in a single JSON file and is exposed through a small, stable set of
+endpoints, so portfolio copy can be updated without touching API code.
 
-This project provides a flexible backend for a portfolio website, allowing easy content updates through the JSON file while maintaining a structured API for frontend consumption.
+## Endpoints
 
-## Main Components
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/` | `{ "message": "Welcome to the API" }` |
+| GET | `/status` | `{ "status": "OK" }` |
+| GET | `/data` | The complete initial state |
+| GET | `/<key>` | `{ "<key>": ... }` for each top-level key in the initial state |
 
-### API Server (src/api.js)
-- Uses Express.js to create a server
-- Implements CORS for cross-origin requests
-- Reads initial state from a JSON file
-- Provides endpoints for:
-  - Homepage
-  - Status check
-  - Fetching all data
-  - Dynamic endpoints for each key in the initial state
+Current dynamic endpoints: `/bddTests`, `/brandName`, `/description`, `/iniTheme`,
+`/portfolioFeatures`, `/appProcedures`, `/themeToggle`, `/nav`, `/brandNameLoading`,
+`/themeCustom`.
 
-### Initial State Data (src/data/initialState.json)
-- Contains structured data for the portfolio, including:
-  - BDD (Behavior-Driven Development) tests
-  - Brand information
-  - Portfolio features
-  - Application procedures
-  - Theme toggle settings
-  - Navigation data
+Unknown paths return **JSON** `404` with an `availableEndpoints` list -- not an HTML
+error page, so clients can parse every response the same way.
 
 ## Project Structure
-- `src/api.js`: Contains the main API logic
-- `src/data/`: Stores the initial state data
 
-## Dependencies
-- Express.js for the server
-- CORS for handling cross-origin requests
+- `src/api.js`: the Express app. Exports the app and only calls `listen()` when run
+  directly, so it works both as a local server and as a Vercel function.
+- `src/data/initialState.json`: all served content.
+- `test/api.test.js`: endpoint tests using the built-in `node:test` runner.
 
-## Key Features
-- Dynamic endpoint generation based on the initial state structure
-- Centralized data management through a JSON file
-- Support for multiple themes
-- BDD test scenarios included in the data
+## Running
 
-## Running the Project
-The server can be started using `npm start`, which runs `node src/api.js`
+```bash
+npm install
+npm start   # http://localhost:3000
+npm run dev # same, with --watch
+npm test    # node:test, no test framework dependency
+```
 
-## Data Flow
-The project follows a structure where data is stored in a JSON file, loaded into the API, and then served through various endpoints. This allows for easy updates to the portfolio content without changing the API code.
+`PORT` overrides the listen port.
+
+## Caching
+
+Responses set `Cache-Control: public, max-age=0, s-maxage=300,
+stale-while-revalidate=86400`. The payload is static per deployment, so the CDN
+serves it and the function is invoked rarely.
+
+## Deployment
+
+Deployed on Vercel via `vercel.json`, which routes all paths to `src/api.js`.

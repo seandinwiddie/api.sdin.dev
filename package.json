@@ -1,17 +1,25 @@
 {
   "name": "api.sdin.dev",
   "version": "1.0.0",
-  "description": "",
+  "description": "Express API serving portfolio content for portfolio.sdin.dev",
   "main": "src/api.js",
   "scripts": {
     "start": "node src/api.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node --watch src/api.js",
+    "test": "node --test"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "api",
+    "express",
+    "portfolio"
+  ],
+  "author": "Sean Dinwiddie",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.1"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
