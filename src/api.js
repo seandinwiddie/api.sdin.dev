@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
-const { getProfile, getRepos, getActivity, getSummary } = require('./github');
+const { getProfile, getRepos, getActivity, getContributions, getSummary } = require('./github');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -62,6 +62,7 @@ const githubRoutes = {
   '/github/profile': getProfile,
   '/github/repos': getRepos,
   '/github/activity': getActivity,
+  '/github/contributions': getContributions,
 };
 
 Object.entries(githubRoutes).forEach(([route, load]) => {

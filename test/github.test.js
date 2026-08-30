@@ -1,6 +1,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const { getSummary, getRepos, getProfile, getActivity } = require('../src/github');
+const { parseCalendarHtml } = require('../src/contributions');
 
 /**
  * These run against the real GitHub API -- no mocks, so a shape change upstream
@@ -77,6 +78,22 @@ describe('github aggregation', () => {
     );
   });
 
+  test('the contribution calendar is chronological and internally consistent', async () => {
+    const { contributions } = await getSummary();
+    if (contributions === null) {
+      // Degraded path is legitimate: the HTML source is not a contract.
+      return;
+    }
+    const dates = contributions.days.map((d) => d.date);
+    assert.deepEqual(dates, [...dates].sort(), 'days must be chronological');
+    assert.ok(contributions.days.every((d) => d.level >= 0 && d.level <= 4));
+    assert.ok(contributions.total >= 0);
+  });
+
+  test('a calendar that cannot be parsed degrades to null rather than throwing', () => {
+    assert.equal(parseCalendarHtml('<html>nothing resembling a calendar</html>'), null);
+  });
+
   test('the second call is served from cache', async () => {
     await getSummary();
     const second = await getSummary();
@@ -87,7 +104,7 @@ describe('github aggregation', () => {
     const summary = await getSummary();
     assert.deepEqual(
       Object.keys(summary).sort(),
-      ['activity', 'authenticated', 'cached', 'languages', 'owners', 'profile', 'repos']
+      ['activity', 'authenticated', 'cached', 'contributions', 'languages', 'owners', 'profile', 'repos']
     );
     assert.equal(typeof summary.authenticated, 'boolean');
   });

@@ -19,6 +19,7 @@ endpoints, so portfolio copy can be updated without touching API code.
 | GET | `/github/profile` | Live GitHub profile |
 | GET | `/github/repos` | Live repos across the user and their orgs, plus language and owner counts |
 | GET | `/github/activity` | Recent public activity (pushes, issues, comments) tallied by repo and kind |
+| GET | `/github/contributions` | Contribution calendar: 365 days of counts and levels, plus the year total |
 
 Current dynamic endpoints: `/bddTests`, `/brandName`, `/description`, `/iniTheme`,
 `/portfolioFeatures`, `/appProcedures`, `/themeToggle`, `/nav`, `/brandNameLoading`,
@@ -45,6 +46,12 @@ cache if GitHub is unreachable so the portfolio degrades instead of breaking.
 An upstream GitHub failure returns **502** with a `detail` field, distinguishing
 a dependency outage from a fault in this service. If one organisation is
 unreachable the rest of the aggregate still resolves.
+
+**On the contribution calendar:** GitHub exposes it through GraphQL (which needs a
+token) but not through REST. With `GITHUB_TOKEN` set the GraphQL API is used;
+without one the public HTML fragment at `/users/:login/contributions` is parsed.
+That HTML is markup, not a contract, so every parse failure resolves to `null`
+and the UI omits the calendar rather than breaking.
 
 **On commit counts:** GitHub's public events feed no longer carries per-push
 commit counts, so `/github/activity` reports pushes, issues and comments — what

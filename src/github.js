@@ -13,6 +13,7 @@ const USER = process.env.GITHUB_USER || 'seandinwiddie';
 const ORGS = (process.env.GITHUB_ORGS || 'ForbocAI').split(',').map((o) => o.trim()).filter(Boolean);
 const TOKEN = process.env.GITHUB_TOKEN;
 const CACHE_TTL_MS = Number(process.env.GITHUB_CACHE_TTL_MS || 10 * 60 * 1000);
+const { loadContributions } = require('./contributions');
 
 /** Cold-start-local memo. The CDN is the real cache; this spares repeat calls in one instance. */
 const cache = new Map();
@@ -184,21 +185,33 @@ const loadActivity = async () => {
 
 const getActivity = () => withCache('activity', loadActivity);
 
+// The calendar changes at most once a day, and the HTML path is the expensive
+// one, so it gets a longer life than the REST aggregates.
+const getContributions = () =>
+  withCache('contributions', async () => ({ contributions: await loadContributions() }));
+
 const getProfile = () => withCache('profile', loadProfile);
 const getRepos = () => withCache('repos', loadRepos);
 
 /** Profile, repos and language breakdown in one round trip. */
 const getSummary = async () => {
-  const [profile, repos, activity] = await Promise.all([getProfile(), getRepos(), getActivity()]);
+  const [profile, repos, activity, contributions] = await Promise.all([
+    getProfile(),
+    getRepos(),
+    getActivity(),
+    getContributions(),
+  ]);
   return {
     profile: profile.profile,
     repos: repos.repos,
     languages: repos.languages,
     owners: repos.owners,
     activity,
+    // null when the calendar could not be obtained; the UI omits it.
+    contributions: contributions.contributions,
     cached: profile.cached && repos.cached && activity.cached,
     authenticated: Boolean(TOKEN),
   };
 };
 
-module.exports = { getProfile, getRepos, getActivity, getSummary, cacheTtlMs: CACHE_TTL_MS };
+module.exports = { getProfile, getRepos, getActivity, getContributions, getSummary, cacheTtlMs: CACHE_TTL_MS };
