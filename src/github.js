@@ -185,6 +185,45 @@ const loadActivity = async () => {
 
 const getActivity = () => withCache('activity', loadActivity);
 
+// The commit search API is the only single request that returns real commit
+// messages across every repo the author touched, organisations included. The
+// events feed cannot do this -- it dropped per-push commit data.
+const CONVENTIONAL = /^(\w+)(?:\(([^)]+)\))?!?:\s*(.+)$/;
+
+/** Splits a conventional-commit subject into its parts; plain subjects pass through. */
+const parseSubject = (subject) => {
+  const match = CONVENTIONAL.exec(subject);
+  return match
+    ? { type: match[1], scope: match[2] ?? null, summary: match[3] }
+    : { type: null, scope: null, summary: subject };
+};
+
+const normalizeCommit = (raw) => {
+  const subject = raw.commit.message.split('\n')[0];
+  return {
+    sha: raw.sha.slice(0, 7),
+    repo: raw.repository.full_name,
+    at: raw.commit.author.date,
+    url: raw.html_url,
+    ...parseSubject(subject),
+    subject,
+  };
+};
+
+const loadCommits = async () => {
+  const raw = await fetchJson(
+    `/search/commits?q=author:${USER}&sort=author-date&order=desc&per_page=50`
+  );
+  const commits = (raw.items || []).map(normalizeCommit);
+  return {
+    commits,
+    total: raw.total_count ?? commits.length,
+    byType: tally(commits.filter((c) => c.type), 'type'),
+  };
+};
+
+const getCommits = () => withCache('commits', loadCommits);
+
 // The calendar changes at most once a day, and the HTML path is the expensive
 // one, so it gets a longer life than the REST aggregates.
 const getContributions = () =>
@@ -195,11 +234,16 @@ const getRepos = () => withCache('repos', loadRepos);
 
 /** Profile, repos and language breakdown in one round trip. */
 const getSummary = async () => {
-  const [profile, repos, activity, contributions] = await Promise.all([
+  const [profile, repos, activity, contributions, commits] = await Promise.all([
     getProfile(),
     getRepos(),
     getActivity(),
     getContributions(),
+    // A search-API failure must not take the whole summary down with it.
+    getCommits().catch((error) => {
+      console.warn('Commit search unavailable:', error.message);
+      return { commits: [], total: 0, byType: [] };
+    }),
   ]);
   return {
     profile: profile.profile,
@@ -209,9 +253,10 @@ const getSummary = async () => {
     activity,
     // null when the calendar could not be obtained; the UI omits it.
     contributions: contributions.contributions,
+    commits,
     cached: profile.cached && repos.cached && activity.cached,
     authenticated: Boolean(TOKEN),
   };
 };
 
-module.exports = { getProfile, getRepos, getActivity, getContributions, getSummary, cacheTtlMs: CACHE_TTL_MS };
+module.exports = { getProfile, getRepos, getActivity, getContributions, getCommits, getSummary, cacheTtlMs: CACHE_TTL_MS };

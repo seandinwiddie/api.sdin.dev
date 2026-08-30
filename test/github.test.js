@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
-const { getSummary, getRepos, getProfile, getActivity } = require('../src/github');
+const { getSummary, getRepos, getProfile, getActivity, getCommits } = require('../src/github');
 const { parseCalendarHtml } = require('../src/contributions');
 
 /**
@@ -94,6 +94,29 @@ describe('github aggregation', () => {
     assert.equal(parseCalendarHtml('<html>nothing resembling a calendar</html>'), null);
   });
 
+  test('commits carry real messages across every repo, orgs included', async () => {
+    const { commits, total } = await getCommits();
+    assert.ok(total > 0);
+    assert.ok(commits.length > 0);
+    commits.forEach((c) => {
+      assert.match(c.sha, /^[0-9a-f]{7}$/);
+      assert.ok(c.subject.length > 0);
+      assert.match(c.url, /^https:\/\/github\.com\//);
+      assert.ok(!c.subject.includes('\n'), 'subject is the first line only');
+    });
+    const dates = commits.map((c) => c.at);
+    assert.deepEqual(dates, [...dates].sort().reverse(), 'newest first');
+  });
+
+  test('conventional commit subjects are split into type, scope and summary', async () => {
+    const { commits } = await getCommits();
+    const conventional = commits.filter((c) => c.type !== null);
+    conventional.forEach((c) => {
+      assert.ok(!c.summary.startsWith(`${c.type}:`), 'type stripped from the summary');
+      assert.ok(c.subject.startsWith(c.type), 'subject keeps the original text');
+    });
+  });
+
   test('the second call is served from cache', async () => {
     await getSummary();
     const second = await getSummary();
@@ -104,7 +127,7 @@ describe('github aggregation', () => {
     const summary = await getSummary();
     assert.deepEqual(
       Object.keys(summary).sort(),
-      ['activity', 'authenticated', 'cached', 'contributions', 'languages', 'owners', 'profile', 'repos']
+      ['activity', 'authenticated', 'cached', 'commits', 'contributions', 'languages', 'owners', 'profile', 'repos']
     );
     assert.equal(typeof summary.authenticated, 'boolean');
   });

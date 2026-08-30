@@ -20,6 +20,7 @@ endpoints, so portfolio copy can be updated without touching API code.
 | GET | `/github/repos` | Live repos across the user and their orgs, plus language and owner counts |
 | GET | `/github/activity` | Recent public activity (pushes, issues, comments) tallied by repo and kind |
 | GET | `/github/contributions` | Contribution calendar: 365 days of counts and levels, plus the year total |
+| GET | `/github/commits` | Recent commits with real messages across every repo, organisations included |
 
 Current dynamic endpoints: `/bddTests`, `/brandName`, `/description`, `/iniTheme`,
 `/portfolioFeatures`, `/appProcedures`, `/themeToggle`, `/nav`, `/brandNameLoading`,
