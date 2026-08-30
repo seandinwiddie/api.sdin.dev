@@ -1,6 +1,6 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
-const { getSummary, getRepos, getProfile } = require('../src/github');
+const { getSummary, getRepos, getProfile, getActivity } = require('../src/github');
 
 /**
  * These run against the real GitHub API -- no mocks, so a shape change upstream
@@ -52,6 +52,31 @@ describe('github aggregation', () => {
     );
   });
 
+  test('repos span the user account and their organisations', async () => {
+    const { repos, owners } = await getRepos();
+    const distinct = new Set(repos.map((r) => r.owner));
+    assert.ok(distinct.size > 1, 'expected org repos alongside personal ones');
+    assert.ok(owners.some((o) => o.owner === 'ForbocAI'), 'ForbocAI work should be included');
+    // fullName disambiguates same-named repos across owners.
+    assert.equal(new Set(repos.map((r) => r.fullName)).size, repos.length);
+  });
+
+  test('activity is normalized and tallied', async () => {
+    const activity = await getActivity();
+    assert.ok(Array.isArray(activity.events));
+    assert.ok(activity.events.every((e) => typeof e.kind === 'string'), 'unknown kinds filtered out');
+    assert.deepEqual(
+      activity.byKind.map((k) => k.count),
+      [...activity.byKind.map((k) => k.count)].sort((a, b) => b - a),
+      'tallies should be descending'
+    );
+    assert.equal(
+      activity.byRepo.reduce((sum, r) => sum + r.count, 0),
+      activity.total,
+      'every event counted exactly once'
+    );
+  });
+
   test('the second call is served from cache', async () => {
     await getSummary();
     const second = await getSummary();
@@ -62,7 +87,7 @@ describe('github aggregation', () => {
     const summary = await getSummary();
     assert.deepEqual(
       Object.keys(summary).sort(),
-      ['authenticated', 'cached', 'languages', 'profile', 'repos']
+      ['activity', 'authenticated', 'cached', 'languages', 'owners', 'profile', 'repos']
     );
     assert.equal(typeof summary.authenticated, 'boolean');
   });

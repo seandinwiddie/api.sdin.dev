@@ -9,6 +9,8 @@
 
 const GITHUB_API = 'https://api.github.com';
 const USER = process.env.GITHUB_USER || 'seandinwiddie';
+/** Organisations whose public repos count as this person's work. */
+const ORGS = (process.env.GITHUB_ORGS || 'ForbocAI').split(',').map((o) => o.trim()).filter(Boolean);
 const TOKEN = process.env.GITHUB_TOKEN;
 const CACHE_TTL_MS = Number(process.env.GITHUB_CACHE_TTL_MS || 10 * 60 * 1000);
 
@@ -77,6 +79,8 @@ const normalizeProfile = (raw) => ({
 const normalizeRepo = (raw) => ({
   id: String(raw.id),
   name: raw.name,
+  fullName: raw.full_name,
+  owner: raw.owner ? raw.owner.login : USER,
   description: raw.description,
   language: raw.language,
   stars: raw.stargazers_count,
@@ -105,25 +109,96 @@ const languageBreakdown = (repos) =>
 
 const loadProfile = async () => ({ profile: normalizeProfile(await fetchJson(`/users/${USER}`)) });
 
+/** One source of repos: the user account, or an organisation they work in. */
+const repoSources = () => [
+  `/users/${USER}/repos?per_page=100&sort=pushed`,
+  ...ORGS.map((org) => `/orgs/${org}/repos?per_page=100&sort=pushed`),
+];
+
 const loadRepos = async () => {
-  const raw = await fetchJson(`/users/${USER}/repos?per_page=100&sort=pushed`);
-  const repos = raw.filter(isOwnWork).map(normalizeRepo).sort(byMostRecentlyPushed);
-  return { repos, languages: languageBreakdown(repos) };
+  // An org being unreachable (renamed, made private) must not lose the rest.
+  const responses = await Promise.all(
+    repoSources().map((path) =>
+      fetchJson(path).catch((error) => {
+        console.warn(`Skipping ${path}:`, error.message);
+        return [];
+      })
+    )
+  );
+
+  const byId = responses
+    .flat()
+    .filter(isOwnWork)
+    .map(normalizeRepo)
+    .reduce((acc, repo) => ({ ...acc, [repo.id]: repo }), {});
+
+  const repos = Object.values(byId).sort(byMostRecentlyPushed);
+  return { repos, languages: languageBreakdown(repos), owners: ownerBreakdown(repos) };
 };
+
+/** Owner -> repo count, so the UI can show org work separately from personal. */
+const ownerBreakdown = (repos) =>
+  Object.entries(
+    repos.reduce((counts, repo) => ({ ...counts, [repo.owner]: (counts[repo.owner] || 0) + 1 }), {})
+  )
+    .map(([owner, count]) => ({ owner, count }))
+    .sort((a, b) => b.count - a.count || a.owner.localeCompare(b.owner));
+
+// GitHub's public events feed no longer carries per-push commit counts, so this
+// reports pushes and issue activity -- what the feed actually proves -- rather
+// than inventing a commit number.
+const ACTIVITY_KINDS = {
+  PushEvent: 'push',
+  IssuesEvent: 'issue',
+  IssueCommentEvent: 'comment',
+  PullRequestEvent: 'pull request',
+  CreateEvent: 'branch or tag',
+  ReleaseEvent: 'release',
+};
+
+const normalizeEvent = (raw) => ({
+  id: raw.id,
+  kind: ACTIVITY_KINDS[raw.type] ?? null,
+  repo: raw.repo.name,
+  at: raw.created_at,
+});
+
+const tally = (events, key) =>
+  Object.entries(events.reduce((acc, e) => ({ ...acc, [e[key]]: (acc[e[key]] || 0) + 1 }), {}))
+    .map(([name, count]) => ({ [key]: name, count }))
+    .sort((a, b) => b.count - a.count);
+
+const loadActivity = async () => {
+  const raw = await fetchJson(`/users/${USER}/events/public?per_page=100`);
+  const events = raw.map(normalizeEvent).filter((e) => e.kind !== null);
+
+  return {
+    events: events.slice(0, 40),
+    byRepo: tally(events, 'repo'),
+    byKind: tally(events, 'kind'),
+    total: events.length,
+    since: events.length ? events[events.length - 1].at : null,
+    until: events.length ? events[0].at : null,
+  };
+};
+
+const getActivity = () => withCache('activity', loadActivity);
 
 const getProfile = () => withCache('profile', loadProfile);
 const getRepos = () => withCache('repos', loadRepos);
 
 /** Profile, repos and language breakdown in one round trip. */
 const getSummary = async () => {
-  const [profile, repos] = await Promise.all([getProfile(), getRepos()]);
+  const [profile, repos, activity] = await Promise.all([getProfile(), getRepos(), getActivity()]);
   return {
     profile: profile.profile,
     repos: repos.repos,
     languages: repos.languages,
-    cached: profile.cached && repos.cached,
+    owners: repos.owners,
+    activity,
+    cached: profile.cached && repos.cached && activity.cached,
     authenticated: Boolean(TOKEN),
   };
 };
 
-module.exports = { getProfile, getRepos, getSummary, cacheTtlMs: CACHE_TTL_MS };
+module.exports = { getProfile, getRepos, getActivity, getSummary, cacheTtlMs: CACHE_TTL_MS };

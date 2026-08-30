@@ -17,7 +17,8 @@ endpoints, so portfolio copy can be updated without touching API code.
 | GET | `/<key>` | `{ "<key>": ... }` for each top-level key in the initial state |
 | GET | `/github` | Live profile, repos and language breakdown in one payload |
 | GET | `/github/profile` | Live GitHub profile |
-| GET | `/github/repos` | Live repos (forks and archives excluded) plus language counts |
+| GET | `/github/repos` | Live repos across the user and their orgs, plus language and owner counts |
+| GET | `/github/activity` | Recent public activity (pushes, issues, comments) tallied by repo and kind |
 
 Current dynamic endpoints: `/bddTests`, `/brandName`, `/description`, `/iniTheme`,
 `/portfolioFeatures`, `/appProcedures`, `/themeToggle`, `/nav`, `/brandNameLoading`,
@@ -37,11 +38,18 @@ cache if GitHub is unreachable so the portfolio degrades instead of breaking.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `GITHUB_USER` | `seandinwiddie` | Account to aggregate |
+| `GITHUB_ORGS` | `ForbocAI` | Comma-separated orgs whose public repos count as this person's work |
 | `GITHUB_TOKEN` | _(none)_ | Optional. Raises the rate limit from 60/hr to 5000/hr |
 | `GITHUB_CACHE_TTL_MS` | `600000` | In-process cache lifetime |
 
 An upstream GitHub failure returns **502** with a `detail` field, distinguishing
-a dependency outage from a fault in this service.
+a dependency outage from a fault in this service. If one organisation is
+unreachable the rest of the aggregate still resolves.
+
+**On commit counts:** GitHub's public events feed no longer carries per-push
+commit counts, so `/github/activity` reports pushes, issues and comments — what
+the feed actually proves — rather than inventing a commit number. Only public
+activity is visible; private repositories never appear.
 
 ## Project Structure
 

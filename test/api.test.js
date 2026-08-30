@@ -83,6 +83,7 @@ describe('api.sdin.dev', () => {
     const { body } = await get('/definitely-not-a-route');
     assert.ok(body.availableEndpoints.includes('/github'));
     assert.ok(body.availableEndpoints.includes('/github/repos'));
+    assert.ok(body.availableEndpoints.includes('/github/activity'));
   });
 
   test('unknown routes return JSON, not an HTML error page', async () => {
