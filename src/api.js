@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
+const { getProfile, getRepos, getSummary } = require('./github');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -22,12 +23,13 @@ try {
   throw new Error(`Cannot start API: ${initialStateFile} is missing or invalid JSON`);
 }
 
-// The payload is static per deployment, so let the CDN serve it rather than
-// invoking the function for every request.
-app.use((req, res, next) => {
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400');
+/** Authored content is static per deployment; GitHub data changes slowly. */
+const cacheFor = (seconds) => (req, res, next) => {
+  res.set('Cache-Control', `public, max-age=0, s-maxage=${seconds}, stale-while-revalidate=86400`);
   next();
-});
+};
+
+app.use(cacheFor(300));
 
 // Homepage route
 app.get('/', (req, res) => {
@@ -44,10 +46,31 @@ app.get('/data', (req, res) => {
   res.json(initialState);
 });
 
+// --- Live GitHub aggregation -------------------------------------------------
+// Wrapping each handler keeps the async rejection path on the JSON error handler
+// instead of surfacing as an unhandled rejection (Express 4 does not await).
+const jsonRoute = (load) => async (req, res, next) => {
+  try {
+    res.json(await load());
+  } catch (error) {
+    next(error);
+  }
+};
+
+const githubRoutes = {
+  '/github': getSummary,
+  '/github/profile': getProfile,
+  '/github/repos': getRepos,
+};
+
+Object.entries(githubRoutes).forEach(([route, load]) => {
+  app.get(route, cacheFor(600), jsonRoute(load));
+});
+
 // Create dynamic endpoints for each key in the initial state.
 // Routes declared above win in Express, so a key colliding with one of them
 // would silently never be reachable -- skip it loudly instead.
-const RESERVED_PATHS = new Set(['', 'status', 'data']);
+const RESERVED_PATHS = new Set(['', 'status', 'data', 'github']);
 
 Object.keys(initialState).forEach((key) => {
   if (RESERVED_PATHS.has(key)) {
@@ -59,22 +82,35 @@ Object.keys(initialState).forEach((key) => {
   });
 });
 
+const availableEndpoints = () => [
+  '/',
+  '/status',
+  '/data',
+  ...Object.keys(githubRoutes),
+  ...Object.keys(initialState)
+    .filter((key) => !RESERVED_PATHS.has(key))
+    .map((key) => `/${key}`),
+];
+
 // Unknown routes returned Express's default HTML error page from a JSON API,
 // so clients parsing the body got a SyntaxError instead of a usable error.
 app.use((req, res) => {
   res.status(404).json({
     error: 'Not Found',
     path: req.path,
-    availableEndpoints: ['/', '/status', '/data', ...Object.keys(initialState)
-      .filter((k) => !RESERVED_PATHS.has(k))
-      .map((k) => `/${k}`)],
+    availableEndpoints: availableEndpoints(),
   });
 });
 
-// Same for unhandled errors: JSON in, JSON out.
+// Same for unhandled errors: JSON in, JSON out. An upstream GitHub failure is a
+// 502, not a generic 500 -- it says the dependency failed, not this service.
 app.use((error, req, res, next) => {
-  console.error('Unhandled error:', error);
-  res.status(500).json({ error: 'Internal Server Error' });
+  const isUpstream = /^GitHub /.test(error.message || '');
+  console.error(isUpstream ? 'Upstream GitHub failure:' : 'Unhandled error:', error);
+  res.status(isUpstream ? 502 : 500).json({
+    error: isUpstream ? 'Upstream Unavailable' : 'Internal Server Error',
+    detail: isUpstream ? error.message : undefined,
+  });
 });
 
 // Only listen when run directly (`npm start`). Under Vercel the exported app is

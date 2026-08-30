@@ -64,6 +64,27 @@ describe('api.sdin.dev', () => {
     }
   });
 
+  test('GET /github returns live aggregated GitHub data', async () => {
+    const { status, body } = await get('/github');
+    assert.equal(status, 200);
+    assert.equal(typeof body.profile.login, 'string');
+    assert.ok(Array.isArray(body.repos));
+    assert.ok(Array.isArray(body.languages));
+  });
+
+  test('GitHub routes are longer-cached than authored content', async () => {
+    const authored = await get('/data');
+    const live = await get('/github');
+    assert.match(authored.headers.get('cache-control'), /s-maxage=300/);
+    assert.match(live.headers.get('cache-control'), /s-maxage=600/);
+  });
+
+  test('the 404 payload advertises the GitHub endpoints', async () => {
+    const { body } = await get('/definitely-not-a-route');
+    assert.ok(body.availableEndpoints.includes('/github'));
+    assert.ok(body.availableEndpoints.includes('/github/repos'));
+  });
+
   test('unknown routes return JSON, not an HTML error page', async () => {
     const response = await fetch(`${baseUrl}/does-not-exist`);
     assert.equal(response.status, 404);

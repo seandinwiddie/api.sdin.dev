@@ -15,6 +15,9 @@ endpoints, so portfolio copy can be updated without touching API code.
 | GET | `/status` | `{ "status": "OK" }` |
 | GET | `/data` | The complete initial state |
 | GET | `/<key>` | `{ "<key>": ... }` for each top-level key in the initial state |
+| GET | `/github` | Live profile, repos and language breakdown in one payload |
+| GET | `/github/profile` | Live GitHub profile |
+| GET | `/github/repos` | Live repos (forks and archives excluded) plus language counts |
 
 Current dynamic endpoints: `/bddTests`, `/brandName`, `/description`, `/iniTheme`,
 `/portfolioFeatures`, `/appProcedures`, `/themeToggle`, `/nav`, `/brandNameLoading`,
@@ -23,8 +26,26 @@ Current dynamic endpoints: `/bddTests`, `/brandName`, `/description`, `/iniTheme
 Unknown paths return **JSON** `404` with an `availableEndpoints` list -- not an HTML
 error page, so clients can parse every response the same way.
 
+## Live GitHub data
+
+`/github*` aggregates the GitHub REST API. This is the layer that justifies the
+API existing rather than the portfolio bundling a JSON file: it holds the token,
+absorbs GitHub's rate limit (60 requests/hour unauthenticated) behind a cache,
+trims ~100 fields per repo to the handful the UI renders, and serves a stale
+cache if GitHub is unreachable so the portfolio degrades instead of breaking.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GITHUB_USER` | `seandinwiddie` | Account to aggregate |
+| `GITHUB_TOKEN` | _(none)_ | Optional. Raises the rate limit from 60/hr to 5000/hr |
+| `GITHUB_CACHE_TTL_MS` | `600000` | In-process cache lifetime |
+
+An upstream GitHub failure returns **502** with a `detail` field, distinguishing
+a dependency outage from a fault in this service.
+
 ## Project Structure
 
+- `src/github.js`: GitHub aggregation, normalization and caching.
 - `src/api.js`: the Express app. Exports the app and only calls `listen()` when run
   directly, so it works both as a local server and as a Vercel function.
 - `src/data/initialState.json`: all served content.
