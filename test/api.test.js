@@ -41,8 +41,42 @@ const githubService = {
   }),
 };
 
+const presenceService = {
+  getSummary: async () => ({
+    checkedAt: '2026-08-30T04:00:00.000Z',
+    cached: false,
+    summary: { channels: 1, operational: 1, limited: 0, unreachable: 0 },
+    channels: [
+      {
+        id: 'registry',
+        label: 'Registry',
+        url: 'https://sdin.dev',
+        state: 'operational',
+        httpStatus: 200,
+        latencyMs: 42,
+        checkedAt: '2026-08-30T04:00:00.000Z',
+      },
+    ],
+  }),
+};
+
+const observatoryService = {
+  getSummary: async () => ({
+    checkedAt: '2026-08-30T04:00:00.000Z',
+    cached: false,
+    availability: 'available',
+    window: {
+      current: { startDate: '2026-08-03', endDate: '2026-08-30' },
+      previous: { startDate: '2026-07-06', endDate: '2026-08-02' },
+    },
+    properties: [],
+  }),
+};
+
 const app = createApp({
   githubService,
+  observatoryService,
+  presenceService,
   now: () => Date.parse('2026-08-30T04:00:00Z'),
 });
 
@@ -102,6 +136,17 @@ describe('api.sdin.dev', () => {
     assert.deepEqual(Object.keys(body).sort(), Object.keys(initialState).sort());
   });
 
+  test('GET /observatory returns the public aggregate observatory', async () => {
+    const { status, body } = await get('/observatory');
+    assert.equal(status, 200);
+    assert.equal(body.availability, 'available');
+    assert.deepEqual(body.properties, []);
+    assert.deepEqual(body.window.current, {
+      startDate: '2026-08-03',
+      endDate: '2026-08-30',
+    });
+  });
+
   test('every initial-state key gets its own endpoint', async () => {
     for (const key of Object.keys(initialState)) {
       const { status, body } = await get(`/${key}`);
@@ -137,6 +182,13 @@ describe('api.sdin.dev', () => {
     });
     assert.equal(typeof body.presentation.metadata.routes.nexus.description, 'string');
     assert.ok(Array.isArray(body.presentation.nexus.presences));
+    assert.equal(typeof body.presentation.observatory.headline, 'string');
+    assert.equal(body.presentation.missions.panels.recorder, 'Flight recorder');
+    assert.equal(body.presentation.missions.copy.activityKinds.push.plural, 'pushes');
+    assert.equal(body.presentation.missions.copy.publicEventsPrefix, 'public events since');
+    assert.equal(body.presentation.observatory.metrics.views, 'VIEWS');
+    assert.equal(body.presentation.observatory.staleLabel, 'STALE SNAPSHOT');
+    assert.equal(typeof body.presentation.observatory.metrics.clicks, 'string');
     assert.deepEqual(
       body.presentation.nexus.presences.find(({ id }) => id === 'forboc'),
       { id: 'forboc', url: 'https://forboc.ai', label: 'Forboc.ai' }
@@ -149,6 +201,16 @@ describe('api.sdin.dev', () => {
         label: 'Lectures',
       }
     );
+    assert.deepEqual(
+      body.presentation.nexus.presences.find(
+        ({ id }) => id === 'functional-programming-library'
+      ),
+      {
+        id: 'functional-programming-library',
+        url: 'https://www.npmjs.com/package/functional-programming-composition',
+        label: 'Functional Programming Library',
+      }
+    );
     assert.ok(Array.isArray(body.presentation.utilityRail.links));
     [...body.presentation.nexus.presences, ...body.presentation.utilityRail.links].forEach(
       ({ id, url, label }) => {
@@ -157,13 +219,23 @@ describe('api.sdin.dev', () => {
         assert.equal(typeof label, 'string');
       }
     );
-    assert.equal(typeof body.presentation.metadata.siteName, 'string');
+    assert.equal(typeof body.presentation.metadata.registryName, 'string');
     assert.equal(typeof body.presentation.metadata.titleSuffix, 'string');
     assert.deepEqual(
       Object.keys(body.presentation.metadata.routes).sort(),
       ['dossier', 'ingress', 'lostSignal', 'missions', 'nexus', 'telemetry']
     );
     assert.equal(typeof body.presentation.lostSignal.actionLabel, 'string');
+    assert.equal(typeof body.presentation.runtime.navigation.routes.nexus.label, 'string');
+    assert.equal(typeof body.presentation.runtime.archiveControl.commands.help[0], 'string');
+    assert.equal(typeof body.presentation.runtime.dossier.stats.repositories, 'string');
+    assert.equal(typeof body.presentation.runtime.telemetry.statement, 'string');
+    assert.match(body.presentation.metadata.defaultDescription, /active missions/);
+    assert.match(body.presentation.metadata.routes.telemetry.description, /system state/);
+    assert.doesNotMatch(
+      JSON.stringify(body.presentation.metadata),
+      /live projects|application and API status/i
+    );
     assert.equal(typeof body.dossier.headline, 'string');
     assert.equal('about' in body, false);
     assert.equal('portfolioFeatures' in body, false);
@@ -180,6 +252,15 @@ describe('api.sdin.dev', () => {
     assert.ok(Array.isArray(body.languages));
     assert.ok(Array.isArray(body.commits.commits));
     assert.equal(body.availability.state, 'live');
+  });
+
+  test('GET /presence returns bounded public-channel observations', async () => {
+    const { status, body } = await get('/presence');
+    assert.equal(status, 200);
+    assert.equal(body.summary.operational, 1);
+    assert.equal(body.channels[0].state, 'operational');
+    assert.equal(body.channels[0].latencyMs, 42);
+    assert.equal('error' in body.channels[0], false);
   });
 
   test('authored and GitHub responses require private revalidation', async () => {
@@ -200,6 +281,7 @@ describe('api.sdin.dev', () => {
     assert.ok(body.availableEndpoints.includes('/github/activity'));
     assert.ok(body.availableEndpoints.includes('/github/contributions'));
     assert.ok(body.availableEndpoints.includes('/github/commits'));
+    assert.ok(body.availableEndpoints.includes('/presence'));
   });
 
   test('unknown routes return JSON, not an HTML error document', async () => {
@@ -217,6 +299,9 @@ describe('api.sdin.dev', () => {
       ...githubService,
       getProfile: async () => { throw new Error('GitHub private upstream detail'); },
       getRepos: async () => { throw new Error('private internal detail'); },
+      getActivity: async () => {
+        throw new Error('GitHub activity response was incomplete');
+      },
     };
     const failureBaseUrl = await startTestApp(t, createApp({
       githubService: failureService,
@@ -224,8 +309,12 @@ describe('api.sdin.dev', () => {
     }));
     const upstreamResponse = await fetch(`${failureBaseUrl}/github/profile`);
     const internalResponse = await fetch(`${failureBaseUrl}/github/repos`);
+    const malformedUpstreamResponse = await fetch(
+      `${failureBaseUrl}/github/activity`
+    );
     const upstreamText = await upstreamResponse.text();
     const internalText = await internalResponse.text();
+    const malformedUpstreamText = await malformedUpstreamResponse.text();
 
     assert.equal(upstreamResponse.status, 502);
     assert.match(upstreamResponse.headers.get('cache-control'), /no-store/);
@@ -235,6 +324,11 @@ describe('api.sdin.dev', () => {
     assert.match(internalResponse.headers.get('cache-control'), /no-store/);
     assert.deepEqual(JSON.parse(internalText), { error: 'Internal Server Error' });
     assert.doesNotMatch(internalText, /private internal detail/);
+    assert.equal(malformedUpstreamResponse.status, 502);
+    assert.match(malformedUpstreamResponse.headers.get('cache-control'), /no-store/);
+    assert.deepEqual(JSON.parse(malformedUpstreamText), {
+      error: 'Upstream Unavailable',
+    });
   });
 
   test('responses are CORS-enabled without shared client-quota caching', async () => {

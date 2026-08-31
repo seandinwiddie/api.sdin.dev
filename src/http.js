@@ -1,8 +1,21 @@
+const { allPass } = require('functional-programming-composition');
+
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
+// Node timer delays above signed 32-bit range overflow to 1 ms.
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
+const validTimeout = allPass([
+  Number.isInteger,
+  (value) => value > 0,
+  (value) => value <= MAX_TIMEOUT_MS,
+]);
 
 const positiveMilliseconds = (value, fallback = DEFAULT_REQUEST_TIMEOUT_MS) => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  const parsedFallback = Number(fallback);
+  return validTimeout(parsed)
+    ? parsed
+    : (validTimeout(parsedFallback) ? parsedFallback : DEFAULT_REQUEST_TIMEOUT_MS);
 };
 
 /**
@@ -25,6 +38,7 @@ const createBoundedFetch = ({
 
 module.exports = {
   DEFAULT_REQUEST_TIMEOUT_MS,
+  MAX_TIMEOUT_MS,
   createBoundedFetch,
   positiveMilliseconds,
 };

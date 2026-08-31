@@ -15,6 +15,8 @@ header-only checks, and a valid CORS preflight receives an empty `204`.
 | `GET` | `/` | Service readiness message. |
 | `GET` | `/status` | Current service version, check time, and authored-data readiness. |
 | `GET` | `/data` | Complete authored registry document. |
+| `GET` | `/observatory` | Public aggregate Analytics and Search Console measurements and trends. |
+| `GET` | `/presence` | Bounded reachability and latency observations for API-authored public channels. |
 | `GET` | `/<content-key>` | One named top-level value from the authored document. |
 | `GET` | `/github` | Aggregated profile, repositories, owners, languages, activity, contribution calendar, commits, and per-resource availability. |
 | `GET` | `/github/profile` | Normalized public GitHub profile. |
@@ -54,7 +56,10 @@ misrepresenting the rest of the summary as unhealthy.
 
 `errorCode` is `PARTIAL_UPSTREAM`, `UPSTREAM_TIMEOUT`, `UPSTREAM_ERROR`, or
 `null`. A complete older value may be returned as stale when refresh fails. A
-partial repository refresh never replaces a complete stale repository value.
+partial repository refresh never replaces a complete stale value or a prior
+partial value with greater upstream-source coverage.
+Failed and weaker refreshes enter a TTL-bounded stale cooldown, so repeated
+public reads do not multiply upstream retry work during an outage.
 If no usable required resource exists, the API returns `502` rather than a
 healthy empty result.
 
@@ -72,13 +77,48 @@ health belongs to each GitHub response's availability metadata.
 
 Repository objects contain only fields the portfolio consumes and use
 client-friendly camelCase names. Repositories are deduplicated, exclude forks
-and archived projects, and are ordered by most recent push.
+and archived projects, and are ordered by most recent push. The configured
+organization fan-out is capped at six and the public repository projection is
+capped at 70 so configuration growth cannot create an unbounded request or
+response surface.
 
-The contribution calendar uses GitHub's contribution data when available and
-resolves to `null` when it cannot be obtained, allowing a client to omit the
-calendar without losing the rest of the response. Public activity includes only
-event kinds the source proves; it does not invent commit counts from push events.
+The contribution calendar uses GitHub's unauthenticated public contribution
+fragment even when the service has a token, and resolves to `null` when it
+cannot be obtained. This lets a client omit the calendar without losing the
+rest of the response and prevents server credentials from widening its viewer
+scope. Public activity includes only event kinds the source proves; it does not
+invent commit counts from push events.
 Private repositories and private activity never appear in these public results.
+Organization repository discovery requests only public records and rejects any
+item that is not explicitly marked public before normalization.
+Commit search enforces that boundary twice: the upstream query requests only
+public repositories, and the response projector rejects any item whose
+repository is not explicitly public.
+
+## Presence observability
+
+`/presence` checks only the public destinations authored in
+`presentation.nexus.presences`. It does not accept a caller-supplied URL and it
+does not follow redirects, keeping the observer outside the API's SSRF surface.
+Checks are bounded, parallel, and briefly cached. Each channel reports a small
+operational/limited/unreachable state, HTTP status when available, observed
+latency, and check time; it does not claim traffic, audience, or conversion data
+that the public source cannot prove. A retained stale snapshot also receives a
+cooldown before another outbound probe set is eligible.
+
+## Impact observatory
+
+`/observatory` publishes aggregate Google Analytics and Search Console signals
+for the fixed `sdin.dev` and `seandinwiddie.com` channels. It includes current
+and prior 28-day measurements, change direction, a bounded daily trend, and
+realtime active users when available. Honest zero, partial, unavailable, and
+unconfigured states remain visible so the portfolio can show a baseline without
+inventing growth. Failed or weaker refreshes retain the strongest snapshot and
+defer the next Google fan-out for one cache interval.
+
+OAuth credentials, Google property identifiers, raw search queries, visitor
+dimensions, countries, path-level records, and upstream diagnostics never enter the public
+response. Short-lived access tokens stay inside the server-side effect boundary.
 
 ## Error responses
 

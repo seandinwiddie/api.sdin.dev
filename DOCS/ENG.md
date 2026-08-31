@@ -24,7 +24,10 @@ The route families are:
 * `/status` for uncached service and authored-data readiness;
 * `/data` for the complete authored portfolio document;
 * one route per non-reserved top-level authored key;
-* `/github` for the aggregate client document; and
+* `/github` for the aggregate client document;
+* `/observatory` for bounded public aggregate Analytics and Search Console
+  signals;
+* `/presence` for bounded public-channel reachability observations; and
 * focused `/github/profile`, `/github/repos`, `/github/activity`,
   `/github/contributions`, and `/github/commits` resources.
 
@@ -84,9 +87,14 @@ The physical modules apply those roles at compact scale:
 | `src/github.js` | Normalization, resource entities, cache state, aggregate projections, and GitHub orchestration. |
 | `src/contributions.js` | Contribution-calendar strategy and normalization. |
 | `src/http.js` | Bounded upstream-fetch effect. |
+| `src/components/observatoryPolicy.js` | Frozen Google endpoint, metric, channel, and configuration contracts. |
 | `src/components/securityPolicy.js` | Inert frozen security methods, origins, headers, defaults, and Helmet policy. |
+| `src/entities/observatoryStore.js` | Loss-averse observatory snapshot, single-flight refresh, and stale provenance. |
+| `src/entities/presenceStore.js` | Bounded public-presence snapshot and single-flight refresh. |
 | `src/entities/rateLimitStore.js` | Bounded process-local client-history entity with Map-order O(1) LRU refresh/eviction. |
 | `src/security.js` | Security decisions and HTTP middleware-system composition. |
+| `src/systems/observatory.js` | Google effect orchestration and privacy-preserving aggregate projections. |
+| `src/systems/presence.js` | Authored-target probing, state classification, and summary projection. |
 | `src/data/initialState.json` | Inert authored component data. |
 
 Growth must split modules by component/entity/system ownership, not by generic
@@ -99,6 +107,15 @@ Normalization, filtering, tallying, ordering, state selection, and response
 projection remain pure. The same input values produce the same serializable
 output without hidden global mutation.
 
+The service is an intentional production consumer of
+`functional-programming-composition`. `allPass` owns timeout validity;
+`multiMatch` and `orElse` own bounded status/availability classification;
+`fold` owns aggregate reductions; `pipe` owns normalization pipelines; and
+`Either` values keep Google transport failure outside successful value
+projections. Use the weakest lawful abstraction and keep fetch/token work at
+the system boundary. The TypeScript lectures may link to these source examples;
+the runtime never depends on curriculum content.
+
 Per-instance services may close over cache state because the cache is an entity
 owned by that service instance. Factories accept effects once at the boundary,
 which keeps tests deterministic and prevents test processes from consuming live
@@ -110,21 +127,29 @@ responses rather than implementation objects.
 The GitHub system must:
 
 * normalize snake_case upstream values to the stable camelCase client schema;
+* validate endpoint-specific successful-response shapes before normalization so
+  malformed `2xx` payloads cannot become truthful-looking empty resources;
 * include the configured user and configured organizations;
-* exclude forked and archived repositories;
+* cap configured organizations at six (seven repository sources including the
+  user) and cap the public repository projection at 70;
+* request only public organization repositories and fail closed unless every
+  projected repository is explicitly public, then exclude forks and archives;
 * deduplicate repositories by identity and order them by most recent push;
 * derive owner/language tallies and the earliest repository date from the same
   normalized collection;
 * expose only supported public activity kinds and never infer commit counts from
   push events;
+* constrain commit search to `is:public` and fail closed unless each projected
+  item's repository explicitly reports `private: false`;
 * parse commit subjects without destroying the original subject; and
 * omit private data because only public resources belong in this API.
 
-Contribution loading selects GraphQL when the server has a GitHub token and the
-public contribution HTML fragment otherwise. The HTML is an upstream markup
-implementation detail, not a reliable API contract. Any request or parse failure
-therefore resolves to an unavailable/null calendar and degraded metadata instead
-of failing an otherwise useful summary.
+Contribution loading always uses the unauthenticated public contribution HTML
+fragment. A configured server token must never widen that viewer scope to
+private or internal contribution activity. The HTML is an upstream markup
+implementation detail, not a reliable API contract. Any request or parse
+failure therefore resolves to an unavailable/null calendar and degraded
+metadata instead of failing an otherwise useful summary.
 
 ## Cache and availability contract
 
@@ -147,10 +172,14 @@ Allowed upstream codes are `PARTIAL_UPSTREAM`, `UPSTREAM_TIMEOUT`, and
 Refresh policy is loss-averse:
 
 1. a complete live result replaces the previous entry;
-2. a partial result may be cached only when no more complete stale value exists;
-3. a partial refresh must never replace a complete stale value;
-4. a failed refresh may serve the previous entry as stale; and
-5. an uncached required-resource failure must reject rather than create a
+2. a partial result may be cached only when no stronger stale value exists;
+3. a partial refresh must never replace a complete value or a partial value
+   with greater upstream-source coverage;
+4. a failed or weaker refresh must serve the retained entry through a fresh
+   TTL cooldown so public polling cannot create an upstream retry storm;
+5. cooldown reads must remain explicitly `cached` and `stale`, preserving the
+   failed refresh's degraded sources and error code; and
+6. an uncached required-resource failure must reject rather than create a
    healthy-looking empty cache entry.
 
 The aggregate `/github` response preserves usable resources when commits or the
@@ -174,7 +203,7 @@ the HTTP representation is conditionally reusable by one client.
 
 ## Timeout and partial-failure contract
 
-Every outbound REST, GraphQL, and contribution-HTML request uses the shared
+Every outbound REST and contribution-HTML request uses the shared
 bounded-fetch effect. Invalid or non-positive duration configuration falls back
 to a safe positive default.
 
@@ -184,6 +213,45 @@ a required-resource failure. Commit failure degrades only commits in the
 aggregate. Contribution failure degrades only contributions. Timeout and other
 upstream failure classes remain distinguishable to clients without exposing a
 credential or raw response body.
+
+## Public observatory contract
+
+The observatory reads two fixed API-owned channels and publishes only aggregate
+evidence suitable for a public interface. Each configured channel may provide
+current and prior 28-day Analytics and Search Console totals, bounded daily
+series, percentage/absolute direction, and realtime active-user count. The
+system counts a report attempt as successful only after its expected metric and
+dimension headers or Search Console row shape passes structural validation.
+Structurally valid empty reports remain legitimate zero evidence; malformed
+successful payloads remain unavailable and cannot replace stronger cached data.
+The reporting calendar closes at the prior America/Los_Angeles day so a partial
+current day cannot masquerade as a comparable period.
+
+Availability is explicit: `available`, `partial`, `unavailable`, or
+`unconfigured`, plus independent `cached` and `stale` provenance. Zero is a
+valid measured baseline. A zero prior value yields no invented percentage. A
+complete cached snapshot survives a weaker refresh or later transport outage;
+weaker evidence cannot overwrite stronger history. Failed or weaker refreshes
+advance a stale cooldown before another Google fan-out is eligible. The OAuth
+stage and report stage each have a 2.5-second default timeout, keeping their
+sequential worst case comfortably inside the portfolio's eight-second request
+budget.
+
+Raw queries, path-level records, countries, visitor dimensions, Google property
+identifiers, OAuth material, transport diagnostics, and access tokens must not
+cross the response boundary. Daily series contain dates and aggregate metrics
+only and stay bounded to the reporting window.
+
+## Public presence contract
+
+Presence targets come exclusively from `presentation.nexus.presences`; callers
+cannot submit a URL. The catalog and returned collection are bounded to seven
+channels. Checks run in parallel through the bounded-fetch effect, use `HEAD`,
+never follow redirects, and reduce results to `operational`, `limited`, or
+`unreachable` plus status, latency, and check time. A short-lived cache and one
+in-flight refresh prevent an interface poll from multiplying outbound work.
+If a refresh rejects after a usable snapshot exists, the retained stale value
+receives a fresh cooldown before another probe fan-out is eligible.
 
 ## Security boundary
 
@@ -239,9 +307,16 @@ semantics belong in the client README.
 
 The optional GitHub token is a server-only upstream credential. It must never
 appear in responses, cache keys exposed to clients, errors, logs, test evidence,
-authored JSON, or documentation examples. The service collects no private GitHub
-resources by design; an authenticated upstream request changes quota and the
-calendar strategy, not the public-data scope.
+authored JSON, or documentation examples. The service collects no private
+GitHub resources by design; authenticated REST requests change quota, not the
+public-data scope. Contribution loading remains an unauthenticated public-viewer
+request regardless of token configuration.
+
+Google OAuth client/refresh credentials and short-lived access tokens remain
+inside the observatory effect boundary under the same rule. Analytics property
+identifiers and Search Console property keys are server configuration, not
+public response fields. Public observatory documents contain only fixed channel
+identity, aggregate metrics, bounded date series, and availability provenance.
 
 Logs may identify the resource/path class that degraded but must not serialize
 request headers or secrets. Internal and upstream failures return generic client
@@ -256,6 +331,11 @@ The deterministic suite must cover:
 * readiness, cache headers, unknown JSON routes, and error classification;
 * public contract keys and serializability;
 * repository normalization/filtering/deduplication/order;
+* aggregate-only observatory normalization, period math, privacy exclusion,
+  partial/unconfigured states, bounded trends, single-flight, and strongest
+  stale preservation;
+* authored-only presence probing, seven-target enforcement, classification,
+  cache provenance, and redirect refusal;
 * single-flight, live, cached, stale, partial, and unavailable states;
 * complete-stale preservation across a partial refresh;
 * timeout classification and contribution degradation;
@@ -278,11 +358,13 @@ A candidate is production-verified only after the active deployed service shows:
 1. uncached current readiness;
 2. complete authored data and focused content routes;
 3. valid live/cached/stale/partial GitHub response semantics;
-4. expected private-revalidation and security headers;
-5. JSON 404, unsupported-method, oversized-request, and rate-limit responses;
-6. allowed-origin and denied-origin CORS behavior;
-7. no leaked secret or stack/internal path; and
-8. successful portfolio consumption of the same deployment.
+4. honest aggregate observatory and bounded presence responses, including
+   privacy exclusions and stale/unconfigured semantics;
+5. expected private-revalidation and security headers;
+6. JSON 404, unsupported-method, oversized-request, and rate-limit responses;
+7. allowed-origin and denied-origin CORS behavior;
+8. no leaked secret or stack/internal path; and
+9. successful portfolio consumption of the same deployment.
 
 Local suite success, source push, platform deployment, and production HTTP
 verification are separate milestones and must be reported separately.

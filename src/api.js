@@ -2,6 +2,8 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const github = require('./github');
+const { createObservatoryService } = require('./systems/observatory');
+const { createPresenceService } = require('./systems/presence');
 const { createSecurityMiddleware } = require('./security');
 const { version } = require('../package.json');
 
@@ -36,11 +38,25 @@ const jsonRoute = (load) => async (req, res, next) => {
   }
 };
 
-const RESERVED_PATHS = new Set(['', 'status', 'data', 'github']);
+const presence = createPresenceService({
+  targets: initialState.presentation.nexus.presences,
+});
+const observatory = createObservatoryService();
+
+const RESERVED_PATHS = new Set([
+  '',
+  'status',
+  'data',
+  'github',
+  'observatory',
+  'presence',
+]);
 
 /** Express boundary with injectable GitHub and clock effects for deterministic tests. */
 const createApp = ({
   githubService = github,
+  observatoryService = observatory,
+  presenceService = presence,
   logger = console,
   now = Date.now,
   securityOptions = {},
@@ -87,6 +103,9 @@ const createApp = ({
     app.get(route, jsonRoute(load));
   });
 
+  app.get('/presence', jsonRoute(presenceService.getSummary));
+  app.get('/observatory', jsonRoute(observatoryService.getSummary));
+
   Object.keys(initialState).forEach((key) => {
     if (RESERVED_PATHS.has(key)) {
       console.warn(`Skipping dynamic route /${key}: shadowed by a built-in route`);
@@ -101,6 +120,8 @@ const createApp = ({
     '/',
     '/status',
     '/data',
+    '/observatory',
+    '/presence',
     ...Object.keys(githubRoutes),
     ...Object.keys(initialState)
       .filter((key) => !RESERVED_PATHS.has(key))

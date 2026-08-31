@@ -31,10 +31,21 @@ lockfile, then review both manifest and lockfile changes.
 | :---- | :---- | :---- |
 | `PORT` | `3000` | Listen port when `src/api.js` starts the local process directly. |
 | `GITHUB_USER` | `seandinwiddie` | GitHub account used for profile, personal repositories, activity, commits, and contributions. |
-| `GITHUB_ORGS` | `ForbocAI` | Comma-separated organizations whose public non-fork, non-archived repositories are included. Whitespace/empty entries are removed. |
-| `GITHUB_TOKEN` | unset | Optional server-side GitHub token. Raises upstream quota and selects the authenticated GraphQL contribution-calendar path. Treat it as a secret and never print or commit it. |
+| `GITHUB_ORGS` | `ForbocAI` | Comma-separated organizations whose public non-fork, non-archived repositories are included. Whitespace, duplicates, and empty entries are removed; at most six organizations are queried. |
+| `GITHUB_TOKEN` | unset | Optional server-side GitHub token for REST quota. It never enters the public contribution-calendar request. Treat it as a secret and never print or commit it. |
 | `GITHUB_CACHE_TTL_MS` | `600000` | Positive in-process resource-cache lifetime in milliseconds; invalid/non-positive input falls back to the default. |
-| `GITHUB_REQUEST_TIMEOUT_MS` | `5000` | Positive timeout in milliseconds applied to every GitHub REST, GraphQL, and HTML contribution request; invalid/non-positive input falls back to the default. |
+| `GITHUB_REQUEST_TIMEOUT_MS` | `5000` | Positive timeout in milliseconds applied to every GitHub REST and HTML contribution request; invalid/non-positive input falls back to the default. |
+| `PRESENCE_CACHE_TTL_MS` | `300000` | Positive lifetime for one bounded public-presence snapshot. |
+| `PRESENCE_REQUEST_TIMEOUT_MS` | `4000` | Positive timeout for each authored-channel `HEAD` probe. |
+| `OBSERVATORY_CACHE_TTL_MS` | `60000` | Positive lifetime for the strongest retained aggregate Google snapshot. |
+| `OBSERVATORY_REQUEST_TIMEOUT_MS` | `2500` | Positive per-stage timeout for OAuth, Analytics, and Search Console requests; sequential OAuth/report stages remain below the client's eight-second budget. |
+| `GOOGLE_OAUTH_CLIENT_ID` | unset | Secret-side OAuth client identifier; all three OAuth values are required before Google effects run. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | unset | Secret OAuth client credential. Never print, commit, expose, or place in an Expo public variable. |
+| `GOOGLE_OAUTH_REFRESH_TOKEN` | unset | Secret refresh credential used only to mint short-lived server-side access tokens. |
+| `GA4_SDIN_DEV_PROPERTY_ID` | unset | Numeric Analytics property identifier for the fixed `sdin.dev` aggregate channel; never returned publicly. |
+| `GA4_SEANDINWIDDIE_COM_PROPERTY_ID` | unset | Numeric Analytics property identifier for the fixed `seandinwiddie.com` aggregate channel; never returned publicly. |
+| `GSC_SDIN_DEV_SITE_URL` | unset | Search Console property URL or `sc-domain:` key for `sdin.dev`; never returned publicly. |
+| `GSC_SEANDINWIDDIE_COM_SITE_URL` | unset | Search Console property URL or `sc-domain:` key for `seandinwiddie.com`; never returned publicly. |
 | `API_CLIENT_IP_SOURCE` | `socket` (`vercel` in `vercel.json`) | Client key source for rate limiting. Only the exact value `vercel` enables one valid `x-vercel-forwarded-for` IP; missing, malformed, or comma-separated values fall back to the socket. Generic `X-Forwarded-For` is never trusted. |
 | `API_CORS_ORIGINS` | unset | Comma-separated additional canonical HTTP(S) origins. Invalid origins are dropped; the required portfolio origins are always included. |
 | `API_CORS_PUBLIC_READ` | `true` | When true, valid browser origins receive wildcard public-read CORS. `true`/`1`/`yes` and `false`/`0`/`no` are accepted case-insensitively; invalid text uses the default. |
@@ -51,6 +62,9 @@ PORT=3001 GITHUB_USER=seandinwiddie GITHUB_ORGS=ForbocAI npm run dev
 
 Keep `GITHUB_TOKEN` in the runtime platform's secret store. Do not place it in
 authored JSON, committed environment files, test fixtures, logs, or docs.
+Apply the same rule to every Google OAuth value. Property identifiers remain
+server configuration and must not enter public responses or client bundles.
+Verify configuration by response state, never by printing environment values.
 
 `vercel.json` explicitly sets `API_CLIENT_IP_SOURCE=vercel`; production
 verification must confirm the platform supplies a single
@@ -93,6 +107,8 @@ use `no-store`.
 | `npm start` | `node src/api.js` | Starts one non-watching process. Success means authored JSON loads, the server binds the selected port, and startup reports its local URL. |
 | `npm run dev` | `node --watch src/api.js` | Starts the same service with Node's watch mode for local iteration. Stop it manually when finished. |
 | `npm test` | `node --test` | Runs all Node test files discovered by the built-in runner. Success is exit zero with no failed/cancelled tests. Counts may grow and must not be hard-coded as the pass criterion. |
+| `npm run check:syntax` | `find src test -type f -name '*.js' -print0 \| xargs -0 -n1 node --check` | Parses every production and test JavaScript file without executing it. |
+| `npm run verify` | `bash scripts/verify-all.sh` | Runs tests, complete source/test syntax, and whitespace validation without stopping after the first failed gate. |
 
 The suite uses injected fetch, clock, timeout-signal, contribution, and GitHub
 service effects. It must remain deterministic and must not spend GitHub quota or
@@ -106,13 +122,21 @@ Use focused commands while diagnosing; run the full suite again afterward:
 node --test test/api.test.js
 node --test test/github.test.js
 node --test test/security.test.js
+node --test test/observatory.test.js
+node --test test/presence.test.js
+node --test test/http.test.js
 node --check src/api.js
 node --check src/contributions.js
 node --check src/github.js
 node --check src/http.js
 node --check src/security.js
+node --check src/components/observatoryPolicy.js
 node --check src/components/securityPolicy.js
+node --check src/entities/observatoryStore.js
+node --check src/entities/presenceStore.js
 node --check src/entities/rateLimitStore.js
+node --check src/systems/observatory.js
+node --check src/systems/presence.js
 find src test -type f -name '*.js' -print0 | xargs -0 -n1 node --check
 git diff --check
 ```
@@ -128,6 +152,7 @@ earlier green run does not validate later edits.
 | `package-lock.json` | Exact transitive dependency resolution for npm/CI. |
 | `vercel.json` | Vercel function build mapping, catch-all route, production mode, and explicit trusted Vercel client-IP source selection. |
 | `src/data/initialState.json` | Canonical authored portfolio document and ambient ECS world served by `/data` and key routes. |
+| `src/components/observatoryPolicy.js` | Fixed Google endpoints, aggregate metrics, channel identities, and configuration names. |
 | `src/components/securityPolicy.js` | Inert allowed-method/origin/header lists, Helmet policy, and security defaults. |
 
 Change a value at its owner rather than adding a second environment/config
@@ -139,15 +164,23 @@ secret classification, runtime consumer, and test coverage here.
 | Path | Responsibility |
 | :---- | :---- |
 | `src/api.js` | Application composition, route/cache policy, JSON errors, and direct-process startup boundary. |
-| `src/github.js` | Normalization, GitHub resource composition, single-flight cache, stale/partial behavior, and availability projection. |
-| `src/contributions.js` | Token-selected GraphQL or public-HTML contribution loading and calendar normalization. |
+| `src/github.js` | Normalization, GitHub resource composition, single-flight cache, stale retry cooldown, stale/partial behavior, and all-resource availability projection. |
+| `src/contributions.js` | Unauthenticated public-HTML contribution loading, privacy boundary, and bounded calendar normalization. |
 | `src/http.js` | One bounded upstream-fetch effect and positive-duration normalization. |
+| `src/components/observatoryPolicy.js` | Frozen Google observatory policy and fixed public-channel configuration. |
 | `src/components/securityPolicy.js` | Serializable/frozen security policy components and defaults. |
+| `src/entities/observatoryStore.js` | Strongest aggregate snapshot, single-flight refresh, explicit stale provenance, and retry cooldown. |
+| `src/entities/presenceStore.js` | Public-presence snapshot, single-flight refresh, stale provenance, and retry cooldown. |
 | `src/entities/rateLimitStore.js` | Bounded process-local request-history entity with Map-order O(1) LRU refresh/eviction; callers consume decisions rather than owning its map. |
 | `src/security.js` | Pure policy decisions and client-IP parsing plus Helmet → Vary → CORS → rate (OPTIONS exempt) → size/framing → method → OPTIONS middleware composition. |
+| `src/systems/observatory.js` | OAuth/Google effects, pure aggregate projection, reporting windows, privacy boundary, and availability composition. |
+| `src/systems/presence.js` | Authored-target probes, bounded parallel composition, and state projection. |
 | `test/api.test.js` | Real ephemeral HTTP-server route, cache-header, authored-contract, readiness, CORS, and error tests. |
-| `test/github.test.js` | Pure/injected GitHub normalization, contract, cache, single-flight, timeout, stale, partial, commit, and contribution tests. |
+| `test/github.test.js` | Pure/injected GitHub normalization, contract, cache, single-flight, stale cooldown, all-resource provenance, timeout, partial, commit, and contribution tests. |
 | `test/security.test.js` | Pure policy plus ephemeral HTTP tests for headers, universal Vary, origin parsing, socket/Vercel client keys, public/restricted CORS, preflight, middleware precedence, methods, request bounds, rate reset/isolation/LRU, injected-store failure, private cache policy, and GET/HEAD behavior. |
+| `test/observatory.test.js` | Aggregate period/trend normalization, privacy exclusions, configuration, availability, single-flight, strongest-stale preservation, and rejected/weaker cooldowns. |
+| `test/presence.test.js` | Authored-only probing, redirect refusal, classification, cache provenance, stale cooldown, failure reduction, and seven-target bound. |
+| `test/http.test.js` | Signed-32-bit timeout validation and bounded-fetch behavior. |
 
 The service is aligned with the larger `Forboc.AI/api` ownership model at a
 smaller scale: serializable contracts stay inert, resource entities own their
@@ -189,9 +222,7 @@ Final local sequence:
 
 ```bash
 npm ci
-npm test
-find src test -type f -name '*.js' -print0 | xargs -0 -n1 node --check
-git diff --check
+npm run verify
 ```
 
 After a candidate is deployed, verify the real service rather than a search or
@@ -201,6 +232,8 @@ deployment dashboard:
 curl -fsS https://api.sdin.dev/status
 curl -fsS https://api.sdin.dev/data
 curl -fsS https://api.sdin.dev/github
+curl -fsS https://api.sdin.dev/observatory
+curl -fsS https://api.sdin.dev/presence
 curl -sS -D - https://api.sdin.dev/definitely-not-a-route -o /dev/null
 ```
 

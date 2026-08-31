@@ -61,13 +61,13 @@
   "description": "Expo Go and RTK Developer",
   "presentation": {
     "metadata": {
-      "siteName": "Sean Dinwiddie — Orbital Registry",
+      "registryName": "Sean Dinwiddie — Orbital Registry",
       "titleSuffix": " — Sean Dinwiddie",
-      "defaultDescription": "AI systems architect and full-stack engineer — selected work, live projects, and system design.",
+      "defaultDescription": "AI systems architect and full-stack engineer — selected work, active missions, and system design.",
       "routes": {
         "ingress": {
           "title": "Ingress",
-          "description": "AI systems architect and full-stack engineer — selected work, live projects, and system design."
+          "description": "AI systems architect and full-stack engineer — selected work, active missions, and system design."
         },
         "nexus": {
           "title": "Nexus",
@@ -83,7 +83,7 @@
         },
         "telemetry": {
           "title": "Telemetry",
-          "description": "Live application and API status."
+          "description": "Live registry telemetry and API system state."
         },
         "lostSignal": {
           "title": "Lost signal",
@@ -139,6 +139,11 @@
           "label": "Lectures"
         },
         {
+          "id": "functional-programming-library",
+          "url": "https://www.npmjs.com/package/functional-programming-composition",
+          "label": "Functional Programming Library"
+        },
+        {
           "id": "personal",
           "url": "https://seandinwiddie.com",
           "label": "seandinwiddie.com"
@@ -154,6 +159,82 @@
           "label": "seandinwiddie.github.io"
         }
       ]
+    },
+    "missions": {
+      "eyebrow": "ORBITAL REGISTRY · ACTIVE MISSIONS",
+      "headline": "Missions",
+      "statement": "Live GitHub operations telemetry, projected through the registry API as the public engineering record changes.",
+      "loadingLabel": "SYNCHRONIZING MISSION ARCHIVE…",
+      "errorLabel": "Mission telemetry is unavailable. Other registry systems remain operational.",
+      "partialLabel": "Live mission data is partially degraded.",
+      "partialDetail": "Available records remain visible while the archive retries.",
+      "staleLabel": "STALE MISSION SNAPSHOT.",
+      "staleDetail": "Last confirmed records remain visible while live telemetry reconnects.",
+      "panels": {
+        "contributions": "Contribution calendar",
+        "recorder": "Flight recorder",
+        "activity": "Recent activity",
+        "languages": "Languages"
+      },
+      "metrics": {
+        "repositories": "repositories indexed",
+        "languages": "languages",
+        "events": "recent events",
+        "followers": "followers"
+      },
+      "copy": {
+        "activityKinds": {
+          "push": { "singular": "push", "plural": "pushes" },
+          "issue": { "singular": "issue", "plural": "issues" },
+          "pull_request": { "singular": "pull request", "plural": "pull requests" },
+          "issue_comment": { "singular": "issue comment", "plural": "issue comments" }
+        },
+        "today": "today",
+        "yesterday": "yesterday",
+        "daysAgoUnit": "days ago",
+        "monthsAgoUnit": "months ago",
+        "yearsAgoUnit": "years ago",
+        "changeKind": "change",
+        "updatedPrefix": "Updated",
+        "indexedUnit": "indexed",
+        "annualUnit": "/ yr",
+        "eventsUnit": "events",
+        "publicEventsPrefix": "public events since",
+        "inUseUnit": "in use",
+        "repositoriesUnit": "repos",
+        "starPrefix": "★"
+      }
+    },
+    "observatory": {
+      "eyebrow": "PUBLIC SIGNAL ARRAY · LIVE AGGREGATES",
+      "headline": "Impact Observatory",
+      "statement": "Aggregate, privacy-safe signals chart the reach and trajectory of Sean Dinwiddie's public systems.",
+      "impactLabel": "INFLUENCE VECTOR",
+      "presenceLabel": "PRESENCE RELAY",
+      "analyticsLabel": "AUDIENCE TELEMETRY",
+      "discoveryLabel": "DISCOVERY TELEMETRY",
+      "windowLabel": "28-DAY VECTOR",
+      "baselineLabel": "PRIOR CYCLE",
+      "liveLabel": "LIVE NOW",
+      "checkedLabel": "OBSERVED",
+      "syncLabel": "SYNCHRONIZING PUBLIC SIGNALS",
+      "emptyLabel": "BASELINE RECORDED",
+      "partialLabel": "PARTIAL SIGNAL",
+      "staleLabel": "STALE SNAPSHOT",
+      "unavailableLabel": "SIGNAL UNAVAILABLE",
+      "unconfiguredLabel": "AWAITING TELEMETRY AUTHORIZATION",
+      "metrics": {
+        "activeUsers": "ACTIVE AUDIENCE",
+        "sessions": "SESSIONS",
+        "views": "VIEWS",
+        "clicks": "SEARCH ARRIVALS",
+        "impressions": "SEARCH APPEARANCES",
+        "ctr": "DISCOVERY RATE",
+        "position": "DISCOVERY POSITION",
+        "followers": "FOLLOWERS",
+        "repositories": "PUBLIC SYSTEMS",
+        "contributions": "ANNUAL OUTPUT"
+      }
     },
     "utilityRail": {
       "links": [
@@ -174,6 +255,265 @@
       "headline": "Signal lost.",
       "statement": "This coordinate is outside the registry.",
       "actionLabel": "Return to the registry"
+    },
+    "runtime": {
+      "errorBoundary": {
+        "headline": "Registry signal interrupted",
+        "message": "Signal interrupted. The registry remains intact; retry the link.",
+        "retryLabel": "Try again"
+      },
+      "layout": {
+        "skipLabel": "Skip to workspace",
+        "workspaces": {
+          "ingress": "Ingress station",
+          "nexus": "Nexus station",
+          "dossier": "Dossier station",
+          "missions": "Missions station",
+          "telemetry": "Telemetry station",
+          "lostSignal": "Lost Signal station"
+        }
+      },
+      "navigation": {
+        "pendingLabel": "Station array loading",
+        "arrayLabel": "Station array",
+        "appearanceLabel": "Appearance matrix",
+        "operationsLabel": "Registry // operations",
+        "primaryLabel": "Primary array",
+        "menu": {
+          "openLabel": "Open appearance controls",
+          "closeLabel": "Close appearance controls",
+          "openText": "◈ CONTROLS",
+          "closeText": "✕ CLOSE"
+        },
+        "routes": {
+          "nexus": {
+            "index": "01",
+            "label": "Nexus",
+            "systemLabel": "Command deck"
+          },
+          "dossier": {
+            "index": "02",
+            "label": "Dossier",
+            "systemLabel": "Field record"
+          },
+          "missions": {
+            "index": "03",
+            "label": "Missions",
+            "systemLabel": "Operations"
+          },
+          "telemetry": {
+            "index": "04",
+            "label": "Telemetry",
+            "systemLabel": "Uplink"
+          }
+        }
+      },
+      "archiveControl": {
+        "heading": "ARCHIVE CONTROL",
+        "closeLabel": "Close Archive Control",
+        "closeText": "close",
+        "commandLabel": "Archive Control command",
+        "dialogLabel": "Archive Control",
+        "openLabel": "Open Archive Control",
+        "triggerLabel": "` ARCHIVE CONTROL",
+        "initialLines": [
+          "ARCHIVE CONTROL // interface ready",
+          "type `help` for commands."
+        ],
+        "placeholders": {
+          "neon": "theme neon",
+          "mirage": "theme mirage"
+        },
+        "feedStates": {
+          "idle": "IDLE",
+          "sync": "SYNC",
+          "live": "LIVE",
+          "offline": "OFFLINE"
+        },
+        "commands": {
+          "help": [
+            "available commands",
+            "  help       list commands",
+            "  whoami     unit record",
+            "  repos      most recently touched repositories",
+            "  langs      language distribution",
+            "  activity   recent public activity by repository",
+            "  commits    recent commit archive",
+            "  telemetry  archive feed state",
+            "  theme      set or cycle the theme",
+            "  go          navigate to a station",
+            "",
+            "Escape closes Archive Control. Backtick (`) or Cmd/Ctrl+K toggles it outside fields."
+          ],
+          "noData": "no telemetry yet — the feed is still syncing.",
+          "noCommits": "no commit archive is available.",
+          "noRepositoriesPrefix": "no repositories for \"",
+          "noRepositoriesSuffix": "\"",
+          "labels": {
+            "designation": "designation",
+            "origin": "origin",
+            "incept": "incept",
+            "units": "units",
+            "output": "output",
+            "feed": "feed",
+            "repositories": "repositories",
+            "commits": "commits"
+          },
+          "undisclosed": "undisclosed",
+          "unknown": "unknown",
+          "repositoryUnit": "repositories",
+          "contributionUnit": "contributions / cycle",
+          "themeCycled": "cycled.",
+          "themeSetPrefix": "theme set to ",
+          "themeSetSuffix": ".",
+          "unknownThemePrefix": "unknown theme \"",
+          "unknownThemeMiddle": "\". available: ",
+          "commandUnavailable": "theme command unavailable.",
+          "openingPrefix": "opening ",
+          "openingSuffix": ".",
+          "navigationUsage": "usage: go ingress | nexus | dossier | missions | telemetry",
+          "unknownCommandPrefix": "unknown command \"",
+          "unknownCommandSuffix": "\". type `help`."
+        }
+      },
+      "theme": {
+        "prefixLabel": "Theme:",
+        "downloadLabel": "Download Theme",
+        "loadLabel": "Load Custom Theme",
+        "updateLabel": "Update Custom Theme",
+        "customLabel": "Custom",
+        "feedback": {
+          "importing": "Loading custom theme…",
+          "ready": "Custom theme active.",
+          "exporting": "Preparing theme download…",
+          "failed": "Custom theme operation failed"
+        }
+      },
+      "dossier": {
+        "eyebrow": "ORBITAL REGISTRY · DOSSIER 01",
+        "evidenceLabel": "evidence",
+        "languageRangeLabel": "Language range",
+        "principlesLabel": "How I work",
+        "stats": {
+          "years": "years shipping",
+          "repositories": "repositories",
+          "languages": "languages",
+          "contributions": "contributions / yr"
+        },
+        "meters": {
+          "languages": "in use",
+          "principles": "rules"
+        },
+        "records": {
+          "capabilities": "Registry Capabilities",
+          "capabilitiesEmpty": "No registry capabilities received",
+          "protocols": "Operating Protocols",
+          "protocolsEmpty": "No operating protocols received"
+        },
+        "unitPlate": {
+          "heading": "ARCHIVE UNIT RECORD",
+          "status": "● OPERATIONAL",
+          "traceLabel": "ANNUAL SIGNAL · 52 WEEK ARC",
+          "traceAccessibilityPrefix": "Annual contribution signal trace:",
+          "undisclosed": "UNDISCLOSED",
+          "recordSuffix": "YR RECORD",
+          "rows": {
+            "designation": "designation",
+            "class": "class",
+            "incept": "incept",
+            "origin": "origin",
+            "operators": "operators",
+            "primarySystems": "primary systems"
+          }
+        }
+      },
+      "signalLattice": {
+        "headlineSuffix": "contributions in the last year",
+        "accessibilityPrefix": "Contribution calendar:",
+        "lessLabel": "Less",
+        "moreLabel": "More",
+        "levelLabel": "Level",
+        "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+        "weekdays": ["Mon", "Wed", "Fri"]
+      },
+      "telemetry": {
+        "eyebrow": "ORBITAL REGISTRY · DIAGNOSTICS",
+        "statement": "Measured in this browser, right now — a timed round trip to the API, the live Redux store, and your own display preferences. Nothing here is a static badge.",
+        "panels": {
+          "uplink": "Uplink",
+          "payload": "Payload",
+          "theme": "Theme subsystem",
+          "runtime": "Runtime"
+        },
+        "latencyUnit": "ms",
+        "emptyLabel": "No telemetry — the feed is still syncing.",
+        "sourceLabel": "View theme source for",
+        "labels": {
+          "repositories": "repositories",
+          "operators": "operators",
+          "languages": "languages",
+          "contributions": "contributions / yr",
+          "recordBegins": "record begins",
+          "active": "active",
+          "discovery": "discovery",
+          "available": "available",
+          "api": "api.sdin.dev",
+          "contentFeed": "content feed",
+          "githubSync": "github sync",
+          "service": "service",
+          "authoredData": "authored data",
+          "brand": "brand",
+          "store": "store",
+          "actionsObserved": "actions observed",
+          "lastAction": "last action",
+          "reducedMotion": "reduced motion",
+          "viewport": "viewport",
+          "feed": "github feed",
+          "theme": "theme"
+        },
+        "values": {
+          "timing": "timing…",
+          "probing": "probing…",
+          "keys": "keys",
+          "units": "units",
+          "loaded": "loaded",
+          "actions": "actions",
+          "store": "4 slices · rtk query",
+          "noneYet": "none yet",
+          "respected": "respected",
+          "notRequested": "not requested",
+          "network": "live from API",
+          "stale": "stale · reconnecting",
+          "syncing": "syncing",
+          "unavailable": "API data unavailable",
+          "reachable": "reachable",
+          "unreachable": "unreachable",
+          "refreshing": "refreshing…",
+          "fetching": "fetching…",
+          "aggregated": "aggregated",
+          "noData": "no data",
+          "loading": "Loading",
+          "error": "Error",
+          "connected": "Connected",
+          "offline": "OFFLINE",
+          "sync": "SYNC",
+          "refresh": "REFRESH",
+          "idle": "IDLE",
+          "live": "LIVE",
+          "staleUpper": "STALE"
+        },
+        "overall": {
+          "nominal": "All systems nominal.",
+          "syncing": "Systems synchronizing.",
+          "degraded": "Running degraded."
+        },
+        "deck": {
+          "heading": "Registry Telemetry",
+          "api": "API State:",
+          "theme": "Current Theme:",
+          "brand": "Brand Name:"
+        }
+      }
     }
   },
   "iniTheme": "mirage",

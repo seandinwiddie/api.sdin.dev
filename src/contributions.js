@@ -1,10 +1,10 @@
 /**
  * Contribution calendar.
  *
- * GitHub does not expose the contribution graph through its REST API. The
- * GraphQL API does (contributionsCollection.contributionCalendar) but requires a
- * token, so with one configured we ask GraphQL, and without one we parse the
- * public HTML fragment at /users/:login/contributions.
+ * GitHub does not expose the public contribution graph through its REST API.
+ * We parse the unauthenticated public HTML fragment at
+ * /users/:login/contributions so a server credential can never widen the
+ * viewer scope to private or internal contribution activity.
  *
  * The HTML path is inherently fragile -- it is markup, not a contract. Every
  * parse failure resolves to null rather than throwing, and the UI simply omits
@@ -14,12 +14,16 @@
 const { createBoundedFetch, positiveMilliseconds } = require('./http');
 
 const DEFAULT_USER = process.env.GITHUB_USER || 'seandinwiddie';
-const DEFAULT_TOKEN = process.env.GITHUB_TOKEN;
 const DEFAULT_TIMEOUT_MS = positiveMilliseconds(process.env.GITHUB_REQUEST_TIMEOUT_MS);
 
 const DAY_CELL = /data-date="(\d{4}-\d{2}-\d{2})"[^>]*data-level="(\d)"/g;
 const TOOLTIP = /<tool-tip[^>]*>([^<]*)<\/tool-tip>/g;
-const TOTAL = /([\d,]+)\s*\n?\s*contributions/;
+const TOTAL_SUMMARY =
+  /<h2\b[^>]*\bid="js-contribution-activity-description"[^>]*>([\s\S]*?)<\/h2>/i;
+const TOTAL = /^\s*([\d,]+)\s+contributions\b/i;
+// A GitHub contribution year can span 53 partial weeks. Bound every transport
+// before it becomes public data so clients can never receive an unbounded grid.
+const MAX_CONTRIBUTION_DAYS = 372;
 
 const countFromTooltip = (text) => {
   const match = /^([\d,]+)\s+contribution/.exec(text.trim());
@@ -27,6 +31,17 @@ const countFromTooltip = (text) => {
 };
 
 const matchesOf = (pattern, text) => [...text.matchAll(pattern)];
+
+const newestChronologicalDays = (days) =>
+  [...days]
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .slice(-MAX_CONTRIBUTION_DAYS);
+
+const annualTotalOf = (html) => {
+  const summary = TOTAL_SUMMARY.exec(html)?.[1]?.replace(/<[^>]*>/g, ' ') ?? '';
+  const match = TOTAL.exec(summary);
+  return match ? Number(match[1].replace(/,/g, '')) : null;
+};
 
 const parseCalendarHtml = (html) => {
   const days = matchesOf(DAY_CELL, html).map(([, date, level]) => ({
@@ -40,32 +55,21 @@ const parseCalendarHtml = (html) => {
 
   // Tooltips are emitted one per day cell, in the same order.
   const counts = matchesOf(TOOLTIP, html).map(([, text]) => countFromTooltip(text));
-  const total = TOTAL.exec(html);
+  const total = annualTotalOf(html);
+  const projectedDays = newestChronologicalDays(
+    days.map((day, index) => ({ ...day, count: counts[index] ?? 0 }))
+  );
 
   return {
     // The calendar table is laid out one row per weekday, so cells arrive in
     // weekday order (each consecutive pair seven days apart). Sort to restore
     // chronological order; consumers should not have to know the DOM shape.
-    days: days
-      .map((day, index) => ({ ...day, count: counts[index] ?? 0 }))
-      .sort((a, b) => a.date.localeCompare(b.date)),
-    total: total ? Number(total[1].replace(/,/g, '')) : days.reduce((s, d) => s + d.level, 0),
+    days: projectedDays,
+    total:
+      total ?? projectedDays.reduce((sum, day) => sum + day.count, 0),
     source: 'html',
   };
 };
-
-const GRAPHQL_QUERY = `query($login:String!){
-  user(login:$login){
-    contributionsCollection{
-      contributionCalendar{
-        totalContributions
-        weeks{ contributionDays{ date contributionCount contributionLevel } }
-      }
-    }
-  }
-}`;
-
-const LEVELS = { NONE: 0, FIRST_QUARTILE: 1, SECOND_QUARTILE: 2, THIRD_QUARTILE: 3, FOURTH_QUARTILE: 4 };
 
 /**
  * Builds the contribution effect boundary from explicit dependencies. The
@@ -75,7 +79,6 @@ const LEVELS = { NONE: 0, FIRST_QUARTILE: 1, SECOND_QUARTILE: 2, THIRD_QUARTILE:
 const createContributionLoader = ({
   fetchImpl = globalThis.fetch,
   user = DEFAULT_USER,
-  token = DEFAULT_TOKEN,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   makeTimeoutSignal,
   logger = console,
@@ -94,43 +97,10 @@ const createContributionLoader = ({
     return parseCalendarHtml(await response.text());
   };
 
-  const fetchGraphqlCalendar = async () => {
-    const response = await boundedFetch('https://api.github.com/graphql', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'User-Agent': 'api.sdin.dev',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: GRAPHQL_QUERY, variables: { login: user } }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`GitHub GraphQL responded ${response.status}`);
-    }
-
-    const body = await response.json();
-    const calendar = body?.data?.user?.contributionsCollection?.contributionCalendar;
-
-    return calendar
-      ? {
-          days: calendar.weeks.flatMap((week) =>
-            week.contributionDays.map((day) => ({
-              date: day.date,
-              count: day.contributionCount,
-              level: LEVELS[day.contributionLevel] ?? 0,
-            }))
-          ),
-          total: calendar.totalContributions,
-          source: 'graphql',
-        }
-      : null;
-  };
-
   /** Resolves to a calendar, or null if it could not be obtained. Never throws. */
   return async () => {
     try {
-      return token ? await fetchGraphqlCalendar() : await fetchHtmlCalendar();
+      return await fetchHtmlCalendar();
     } catch (error) {
       logger.warn('Contribution calendar unavailable:', error.message);
       return null;
@@ -140,4 +110,9 @@ const createContributionLoader = ({
 
 const loadContributions = createContributionLoader();
 
-module.exports = { createContributionLoader, loadContributions, parseCalendarHtml };
+module.exports = {
+  MAX_CONTRIBUTION_DAYS,
+  createContributionLoader,
+  loadContributions,
+  parseCalendarHtml,
+};
