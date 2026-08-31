@@ -328,6 +328,8 @@
           "idle": "IDLE",
           "sync": "SYNC",
           "live": "LIVE",
+          "stale": "STALE",
+          "partial": "DEGRADED",
           "offline": "OFFLINE"
         },
         "commands": {
