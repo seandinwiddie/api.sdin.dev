@@ -52,7 +52,7 @@ const createApp = ({
   app.use(revalidatePrivately);
 
   app.get('/', (req, res) => {
-    res.json({ message: 'Welcome to the API' });
+    res.json({ message: 'api.sdin.dev ready' });
   });
 
   // This endpoint reports this service's readiness, not cached upstream health.

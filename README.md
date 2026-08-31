@@ -1,8 +1,8 @@
 # api.sdin.dev
 
 [api.sdin.dev](https://api.sdin.dev) is the public JSON service behind
-[portfolio.sdin.dev](https://portfolio.sdin.dev). It provides the portfolio's
-authored copy and ambient world plus normalized public GitHub projects,
+[portfolio.sdin.dev](https://portfolio.sdin.dev). It provides the registry's
+authored copy and ambient world plus normalized public GitHub missions,
 activity, contributions, and commits.
 
 ## Endpoints
@@ -12,9 +12,9 @@ header-only checks, and a valid CORS preflight receives an empty `204`.
 
 | Method | Path | Response |
 | :---- | :---- | :---- |
-| `GET` | `/` | Service welcome message. |
+| `GET` | `/` | Service readiness message. |
 | `GET` | `/status` | Current service version, check time, and authored-data readiness. |
-| `GET` | `/data` | Complete authored portfolio document. |
+| `GET` | `/data` | Complete authored registry document. |
 | `GET` | `/<content-key>` | One named top-level value from the authored document. |
 | `GET` | `/github` | Aggregated profile, repositories, owners, languages, activity, contribution calendar, commits, and per-resource availability. |
 | `GET` | `/github/profile` | Normalized public GitHub profile. |
@@ -24,8 +24,8 @@ header-only checks, and a valid CORS preflight receives an empty `204`.
 | `GET` | `/github/commits` | Recent public commit subjects, repository links, dates, and conventional-commit type/scope when present. |
 
 The content-key routes are `/bddTests`, `/brandName`, `/description`,
-`/iniTheme`, `/portfolioFeatures`, `/appProcedures`, `/themeToggle`, `/nav`,
-`/brandNameLoading`, `/themeCustom`, `/ambientScene`, and `/about`.
+`/iniTheme`, `/registryCapabilities`, `/operatingProtocols`, `/presentation`,
+`/themeToggle`, `/themeCustom`, `/ambientScene`, and `/dossier`.
 
 ## Availability and freshness
 
@@ -76,7 +76,7 @@ and archived projects, and are ordered by most recent push.
 
 The contribution calendar uses GitHub's contribution data when available and
 resolves to `null` when it cannot be obtained, allowing a client to omit the
-calendar without losing the rest of the page. Public activity includes only
+calendar without losing the rest of the response. Public activity includes only
 event kinds the source proves; it does not invent commit counts from push events.
 Private repositories and private activity never appear in these public results.
 

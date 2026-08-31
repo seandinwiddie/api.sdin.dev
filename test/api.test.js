@@ -78,10 +78,10 @@ const startTestApp = (t, testApp) =>
   });
 
 describe('api.sdin.dev', () => {
-  test('GET / returns a welcome payload', async () => {
+  test('GET / returns a readiness payload', async () => {
     const { status, body } = await get('/');
     assert.equal(status, 200);
-    assert.equal(body.message, 'Welcome to the API');
+    assert.equal(body.message, 'api.sdin.dev ready');
   });
 
   test('GET /status is uncached and reports service readiness', async () => {
@@ -114,9 +114,9 @@ describe('api.sdin.dev', () => {
     const { body } = await get('/data');
     assert.equal(typeof body.brandName, 'string');
     assert.equal(typeof body.description, 'string');
-    assert.ok(Array.isArray(body.portfolioFeatures));
-    assert.ok(Array.isArray(body.appProcedures));
-    for (const item of [...body.portfolioFeatures, ...body.appProcedures]) {
+    assert.ok(Array.isArray(body.registryCapabilities));
+    assert.ok(Array.isArray(body.operatingProtocols));
+    for (const item of [...body.registryCapabilities, ...body.operatingProtocols]) {
       assert.equal(typeof item.id, 'string');
       assert.equal(typeof item.title, 'string');
       assert.equal(typeof item.description, 'string');
@@ -127,6 +127,49 @@ describe('api.sdin.dev', () => {
       assert.equal(typeof body.ambientScene.visuals[id].label, 'string');
       assert.equal(typeof body.ambientScene.motions[id].duration, 'number');
     }
+    assert.equal(typeof body.presentation.ingress.name, 'string');
+    assert.equal(typeof body.presentation.ingress.statement, 'string');
+    assert.equal(typeof body.presentation.ingress.install.webUrl, 'string');
+    assert.ok(Array.isArray(body.presentation.ingress.ctas));
+    body.presentation.ingress.ctas.forEach(({ href, label }) => {
+      assert.match(href, /^\/(?:dossier|missions|telemetry)$/);
+      assert.equal(typeof label, 'string');
+    });
+    assert.equal(typeof body.presentation.metadata.routes.nexus.description, 'string');
+    assert.ok(Array.isArray(body.presentation.nexus.presences));
+    assert.deepEqual(
+      body.presentation.nexus.presences.find(({ id }) => id === 'forboc'),
+      { id: 'forboc', url: 'https://forboc.ai', label: 'Forboc.ai' }
+    );
+    assert.deepEqual(
+      body.presentation.nexus.presences.find(({ id }) => id === 'lectures'),
+      {
+        id: 'lectures',
+        url: 'https://seandinwiddie.github.io/lectures/',
+        label: 'Lectures',
+      }
+    );
+    assert.ok(Array.isArray(body.presentation.utilityRail.links));
+    [...body.presentation.nexus.presences, ...body.presentation.utilityRail.links].forEach(
+      ({ id, url, label }) => {
+        assert.equal(typeof id, 'string');
+        assert.match(url, /^https:\/\//);
+        assert.equal(typeof label, 'string');
+      }
+    );
+    assert.equal(typeof body.presentation.metadata.siteName, 'string');
+    assert.equal(typeof body.presentation.metadata.titleSuffix, 'string');
+    assert.deepEqual(
+      Object.keys(body.presentation.metadata.routes).sort(),
+      ['dossier', 'ingress', 'lostSignal', 'missions', 'nexus', 'telemetry']
+    );
+    assert.equal(typeof body.presentation.lostSignal.actionLabel, 'string');
+    assert.equal(typeof body.dossier.headline, 'string');
+    assert.equal('about' in body, false);
+    assert.equal('portfolioFeatures' in body, false);
+    assert.equal('appProcedures' in body, false);
+    assert.equal('brandNameLoading' in body, false);
+    assert.equal('nav' in body, false);
   });
 
   test('GET /github returns live aggregated GitHub data', async () => {
@@ -159,7 +202,7 @@ describe('api.sdin.dev', () => {
     assert.ok(body.availableEndpoints.includes('/github/commits'));
   });
 
-  test('unknown routes return JSON, not an HTML error page', async () => {
+  test('unknown routes return JSON, not an HTML error document', async () => {
     const response = await fetch(`${baseUrl}/does-not-exist`);
     assert.equal(response.status, 404);
     assert.match(response.headers.get('content-type'), /application\/json/);

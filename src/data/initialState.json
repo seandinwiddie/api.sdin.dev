@@ -3,26 +3,26 @@
     {
       "id": "1",
       "Feature": "Data Flow",
-      "Scenario": "the app loads",
-      "When": "the data is fetched from the initialState.json file through the api slice using RTK Query, automatically cached in the Redux store",
-      "Then": "components access this data through their respective slices. Actions are dispatched for user interactions, with reducers updating the store accordingly",
-      "Given": "a user is loads the app"
+      "Scenario": "the system initializes",
+      "When": "the data is fetched from the API through RTK Query and cached as the single server-document authority",
+      "Then": "feature compositions select only the required fields from the RTK Query cache and pass derived view models to presentation components",
+      "Given": "an operator enters the registry"
     },
     {
       "id": "2",
-      "Feature": "Navbar",
-      "Scenario": "Navbar loads",
-      "When": "the navbar is loaded",
-      "Then": "the navbar is displayed with the brand name, home button and status page button, theme download and load button, and theme toggle button",
-      "Given": "a user is loads the app"
+      "Feature": "Navigation system",
+      "Scenario": "The command navigation loads",
+      "When": "the application shell becomes interactive",
+      "Then": "the responsive rail and dock expose the brand, nexus, dossier, missions, telemetry, theme selection, custom-theme controls, and archive console",
+      "Given": "an operator enters the registry"
     },
     {
       "id": "3",
-      "Feature": "body",
-      "Scenario": "body loads",
-      "When": "the body is loaded",
-      "Then": "the body is displayed with the content of the page",
-      "Given": "a user is loads the app"
+      "Feature": "Registry content",
+      "Scenario": "Registry records activate",
+      "When": "the authored document becomes available",
+      "Then": "the active system regions project their API-owned records",
+      "Given": "an operator enters the registry"
     },
     {
       "id": "4",
@@ -44,9 +44,9 @@
       "id": "6",
       "Feature": "Theme Toggle",
       "Scenario": "the app loads",
-      "Given": "the app has multiple themes in the src/styles/themes directory",
-      "When": "the app dynamically loads the themes from the src/styles/themes directory",
-      "Then": "the app loads the themes in the theme toggle button"
+      "Given": "the compiled application includes a typed built-in theme profile catalog",
+      "When": "the application shell initializes theme selection",
+      "Then": "the theme control exposes every validated built-in profile in catalog order"
     },
     {
       "id": "7",
@@ -54,13 +54,130 @@
       "Scenario": "User toggles between themes",
       "Given": "the app has multiple themes available",
       "When": "the user clicks the Theme Toggle button",
-      "Then": "the app switches to the next available theme in the dynamicly list loaded from the src/styles/themes directory"
+      "Then": "the application switches to the next validated profile and applies its CSS, Tamagui, visualization, and motion presentation coherently"
     }
   ],
-  "brandName": "Portfolio.sdin.dev",
+  "brandName": "Orbital Registry",
   "description": "Expo Go and RTK Developer",
+  "presentation": {
+    "metadata": {
+      "siteName": "Sean Dinwiddie — Orbital Registry",
+      "titleSuffix": " — Sean Dinwiddie",
+      "defaultDescription": "AI systems architect and full-stack engineer — selected work, live projects, and system design.",
+      "routes": {
+        "ingress": {
+          "title": "Ingress",
+          "description": "AI systems architect and full-stack engineer — selected work, live projects, and system design."
+        },
+        "nexus": {
+          "title": "Nexus",
+          "description": "Sean Dinwiddie's active signals and missions."
+        },
+        "dossier": {
+          "title": "Dossier",
+          "description": "What I build, and the repositories that evidence it."
+        },
+        "missions": {
+          "title": "Missions",
+          "description": "Live GitHub missions and activity, updated automatically."
+        },
+        "telemetry": {
+          "title": "Telemetry",
+          "description": "Live application and API status."
+        },
+        "lostSignal": {
+          "title": "Lost signal",
+          "description": "The requested coordinate is outside the registry."
+        }
+      }
+    },
+    "ingress": {
+      "eyebrow": "DEEP SPACE NETWORK · COMMAND NODE 01",
+      "identityLabel": "IDENTITY / SYSTEMS ARCHITECT",
+      "name": "Sean Dinwiddie",
+      "statement": "AI systems architect and full-stack engineer. Local-first neuro-symbolic engines, universal Expo apps, and functional cores in TypeScript, C++ and Haskell.",
+      "accessLabel": "MISSION ACCESS",
+      "accessCountLabel": "LINKS",
+      "unitClass": "AI SYSTEMS ARCHITECT",
+      "ctas": [
+        {
+          "href": "/missions",
+          "label": "Active Missions"
+        },
+        {
+          "href": "/dossier",
+          "label": "Open Dossier"
+        },
+        {
+          "href": "/telemetry",
+          "label": "Read Telemetry"
+        }
+      ],
+      "install": {
+        "webUrl": "https://portfolio.sdin.dev",
+        "nativeUrl": null,
+        "webTitle": "Open this on your phone",
+        "webDescription": "Scan to open the live registry on another device. This Expo system also targets iOS and Android; no public native install is linked here.",
+        "nativeTitle": "Also a native app",
+        "nativeDescription": "One Expo codebase — this same registry ships to iOS and Android. Scan to install it."
+      }
+    },
+    "nexus": {
+      "eyebrow": "ORBITAL REGISTRY · COMMAND OVERVIEW",
+      "headline": "Systems, missions, signals.",
+      "statement": "Sean Dinwiddie's live engineering registry. Select a communications channel or move through the command rail to inspect the work, evidence, and runtime.",
+      "presenceLabel": "OPEN SIGNAL CHANNEL",
+      "presences": [
+        {
+          "id": "forboc",
+          "url": "https://forboc.ai",
+          "label": "Forboc.ai"
+        },
+        {
+          "id": "lectures",
+          "url": "https://seandinwiddie.github.io/lectures/",
+          "label": "Lectures"
+        },
+        {
+          "id": "personal",
+          "url": "https://seandinwiddie.com",
+          "label": "seandinwiddie.com"
+        },
+        {
+          "id": "registry",
+          "url": "https://sdin.dev",
+          "label": "sdin.dev"
+        },
+        {
+          "id": "github-pages",
+          "url": "https://seandinwiddie.github.io",
+          "label": "seandinwiddie.github.io"
+        }
+      ]
+    },
+    "utilityRail": {
+      "links": [
+        {
+          "id": "registry-repository",
+          "url": "https://github.com/seandinwiddie/portfolio",
+          "label": "Registry Source"
+        },
+        {
+          "id": "api-repository",
+          "url": "https://github.com/seandinwiddie/api.sdin.dev",
+          "label": "API Source"
+        }
+      ]
+    },
+    "lostSignal": {
+      "eyebrow": "NAVIGATION VOID",
+      "headline": "Signal lost.",
+      "statement": "This coordinate is outside the registry.",
+      "actionLabel": "Return to the registry"
+    }
+  },
   "iniTheme": "mirage",
-  "portfolioFeatures": [
+  "registryCapabilities": [
     {
       "id": "1",
       "title": "Redux Web and Native Application Development",
@@ -72,26 +189,26 @@
       "description": "I develop custom UX and UI designs for web and mobile applications."
     }
   ],
-  "appProcedures": [
+  "operatingProtocols": [
     {
       "id": "1",
       "title": "Data Flow and Logic",
-      "description": "No hardcoded data is to live in component or slice files. Data is fetched from the API and stored in the Redux store. The data is then used by the components through their respective slices and reducers. https://redux.js.org/style-guide/#put-as-much-logic-as-possible-in-reducers"
+      "description": "No authored registry data lives in runtime component or slice files. RTK Query owns the API document cache, feature compositions select the required fields, pure selectors derive view models, and views render those models. https://redux.js.org/tutorials/essentials/part-7-rtk-query-basics"
     },
     {
       "id": "2",
       "title": "Theming",
-      "description": "Theming is implemented using the Tamagui library. The theme is stored in the Redux store and is used by the components. Theme files are located in the src/styles/themes directory using a theme-<themeName>.css naming convention. There is a theme toggle button in the navigation bar that allows the user to switch between themes that are dynamically loaded from the src/styles/themes directory. There is a theme template download button and theme load button for loading custom themes."
+      "description": "The typed compiled theme profile catalog owns built-in identity, source provenance, tokens, visualization, and motion presentation. Redux owns the visitor's selected mode, while the responsive rail and dock expose theme cycling plus validated custom-theme import and export controls."
     },
     {
       "id": "3",
       "title": "Routing",
-      "description": "Routing is implemented using the Expo Router library. The routing is stored in the Redux store and is used by the components."
+      "description": "Expo Router owns route state and browser history. System compositions derive route-aware view models, and navigation controls issue one explicit route transition per user event."
     },
     {
       "id": "4",
       "title": "Data",
-      "description": "The data flow is API-owned JSON > RTK Query cache > listener > entity slice > selector > view. Portfolio runtime code contains no bundled content fallback; API contract types live beside the API boundary."
+      "description": "The data flow is API-owned JSON > RTK Query cache > selectFromResult feature composition > pure selector > view. Registry runtime code contains no mirrored server-data slice and no bundled content fallback; API contract types live beside the API boundary."
     },
     {
       "id": "5",
@@ -104,12 +221,6 @@
     "themes": [],
     "status": "idle",
     "error": null
-  },
-  "nav": {
-    "brandName": ""
-  },
-  "brandNameLoading": {
-    "isLoading": true
   },
   "themeCustom": {
     "customThemeName": null
@@ -238,7 +349,7 @@
       }
     }
   },
-  "about": {
+  "dossier": {
     "headline": "I build systems that think locally.",
     "statement": "Twelve years of shipping, most of it spent on the awkward seams: game engines that need to reason without a network, one codebase that has to be native on three platforms, and functional cores that keep their shape whether they are written in TypeScript, C++ or Haskell.",
     "domains": [
@@ -269,7 +380,7 @@
         "id": "3",
         "title": "Universal applications",
         "summary": "One Expo codebase that is genuinely native on iOS and Android, and static on the web.",
-        "detail": "Redux Toolkit for state, RTK Query for the server cache, Tamagui for a design system that compiles to both. This site is the reference implementation \u2014 read its source, then scan the QR.",
+        "detail": "Redux Toolkit for state, RTK Query for the server cache, Tamagui for a design system that compiles to both. This registry is the reference implementation \u2014 read its source, then scan the QR.",
         "repos": [
           "seandinwiddie/portfolio",
           "seandinwiddie/api.sdin.dev",
@@ -307,7 +418,7 @@
       {
         "id": "4",
         "title": "Evidence over assertion",
-        "description": "Every claim on this page links to the repository that backs it."
+        "description": "Every registry claim links to the repository that backs it."
       }
     ]
   }
