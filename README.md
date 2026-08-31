@@ -1,89 +1,103 @@
 # api.sdin.dev
 
-Express.js API serving portfolio content for [portfolio.sdin.dev](https://portfolio.sdin.dev).
-
-## Description
-
-Content lives in a single JSON file and is exposed through a small, stable set of
-endpoints, so portfolio copy can be updated without touching API code.
+[api.sdin.dev](https://api.sdin.dev) is the public JSON service behind
+[portfolio.sdin.dev](https://portfolio.sdin.dev). It provides the portfolio's
+authored copy and ambient world plus normalized public GitHub projects,
+activity, contributions, and commits.
 
 ## Endpoints
 
-| Method | Path | Returns |
-| --- | --- | --- |
-| GET | `/` | `{ "message": "Welcome to the API" }` |
-| GET | `/status` | `{ "status": "OK" }` |
-| GET | `/data` | The complete initial state |
-| GET | `/<key>` | `{ "<key>": ... }` for each top-level key in the initial state |
-| GET | `/github` | Live profile, repos and language breakdown in one payload |
-| GET | `/github/profile` | Live GitHub profile |
-| GET | `/github/repos` | Live repos across the user and their orgs, plus language and owner counts |
-| GET | `/github/activity` | Recent public activity (pushes, issues, comments) tallied by repo and kind |
-| GET | `/github/contributions` | Contribution calendar: 365 days of counts and levels, plus the year total |
-| GET | `/github/commits` | Recent commits with real messages across every repo, organisations included |
+All content endpoints are read-only and return JSON. `HEAD` is available for
+header-only checks, and a valid CORS preflight receives an empty `204`.
 
-Current dynamic endpoints: `/bddTests`, `/brandName`, `/description`, `/iniTheme`,
-`/portfolioFeatures`, `/appProcedures`, `/themeToggle`, `/nav`, `/brandNameLoading`,
-`/themeCustom`.
+| Method | Path | Response |
+| :---- | :---- | :---- |
+| `GET` | `/` | Service welcome message. |
+| `GET` | `/status` | Current service version, check time, and authored-data readiness. |
+| `GET` | `/data` | Complete authored portfolio document. |
+| `GET` | `/<content-key>` | One named top-level value from the authored document. |
+| `GET` | `/github` | Aggregated profile, repositories, owners, languages, activity, contribution calendar, commits, and per-resource availability. |
+| `GET` | `/github/profile` | Normalized public GitHub profile. |
+| `GET` | `/github/repos` | Non-fork, non-archived public repositories across the configured user and organizations, with owner/language summaries. |
+| `GET` | `/github/activity` | Recent supported public activity, grouped by repository and event kind. |
+| `GET` | `/github/contributions` | Chronological contribution days, intensity levels, total, and source when available. |
+| `GET` | `/github/commits` | Recent public commit subjects, repository links, dates, and conventional-commit type/scope when present. |
 
-Unknown paths return **JSON** `404` with an `availableEndpoints` list -- not an HTML
-error page, so clients can parse every response the same way.
+The content-key routes are `/bddTests`, `/brandName`, `/description`,
+`/iniTheme`, `/portfolioFeatures`, `/appProcedures`, `/themeToggle`, `/nav`,
+`/brandNameLoading`, `/themeCustom`, `/ambientScene`, and `/about`.
 
-## Live GitHub data
+## Availability and freshness
 
-`/github*` aggregates the GitHub REST API. This is the layer that justifies the
-API existing rather than the portfolio bundling a JSON file: it holds the token,
-absorbs GitHub's rate limit (60 requests/hour unauthenticated) behind a cache,
-trims ~100 fields per repo to the handful the UI renders, and serves a stale
-cache if GitHub is unreachable so the portfolio degrades instead of breaking.
+Every GitHub resource identifies whether its value is `live`, `cached`, `stale`,
+`partial`, or `unavailable`. Resource responses include:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `GITHUB_USER` | `seandinwiddie` | Account to aggregate |
-| `GITHUB_ORGS` | `ForbocAI` | Comma-separated orgs whose public repos count as this person's work |
-| `GITHUB_TOKEN` | _(none)_ | Optional. Raises the rate limit from 60/hr to 5000/hr |
-| `GITHUB_CACHE_TTL_MS` | `600000` | In-process cache lifetime |
-
-An upstream GitHub failure returns **502** with a `detail` field, distinguishing
-a dependency outage from a fault in this service. If one organisation is
-unreachable the rest of the aggregate still resolves.
-
-**On the contribution calendar:** GitHub exposes it through GraphQL (which needs a
-token) but not through REST. With `GITHUB_TOKEN` set the GraphQL API is used;
-without one the public HTML fragment at `/users/:login/contributions` is parsed.
-That HTML is markup, not a contract, so every parse failure resolves to `null`
-and the UI omits the calendar rather than breaking.
-
-**On commit counts:** GitHub's public events feed no longer carries per-push
-commit counts, so `/github/activity` reports pushes, issues and comments — what
-the feed actually proves — rather than inventing a commit number. Only public
-activity is visible; private repositories never appear.
-
-## Project Structure
-
-- `src/github.js`: GitHub aggregation, normalization and caching.
-- `src/api.js`: the Express app. Exports the app and only calls `listen()` when run
-  directly, so it works both as a local server and as a Vercel function.
-- `src/data/initialState.json`: all served content.
-- `test/api.test.js`: endpoint tests using the built-in `node:test` runner.
-
-## Running
-
-```bash
-npm install
-npm start   # http://localhost:3000
-npm run dev # same, with --watch
-npm test    # node:test, no test framework dependency
+```json
+{
+  "cached": false,
+  "stale": false,
+  "availability": {
+    "state": "live",
+    "cached": false,
+    "stale": false,
+    "partial": false,
+    "fetchedAt": "2026-08-30T00:00:00.000Z",
+    "degradedSources": [],
+    "errorCode": null
+  }
+}
 ```
 
-`PORT` overrides the listen port.
+The aggregate `/github` response adds `partial`, `checkedAt`, and an
+`availability.resources` map. Clients can omit one unavailable panel without
+misrepresenting the rest of the summary as unhealthy.
 
-## Caching
+`errorCode` is `PARTIAL_UPSTREAM`, `UPSTREAM_TIMEOUT`, `UPSTREAM_ERROR`, or
+`null`. A complete older value may be returned as stale when refresh fails. A
+partial repository refresh never replaces a complete stale repository value.
+If no usable required resource exists, the API returns `502` rather than a
+healthy empty result.
 
-Responses set `Cache-Control: public, max-age=0, s-maxage=300,
-stale-while-revalidate=86400`. The payload is static per deployment, so the CDN
-serves it and the function is invoked rarely.
+Ordinary responses use private conditional revalidation. They may carry an
+`ETag`, but are never stored as shared CDN content; each network request reaches
+the service's security boundary before a client can reuse a `304`. `/status` and
+all error responses are always `no-store` so an old OK or failure cannot be
+mistaken for current state. GitHub's in-process resource cache still provides the
+live/cached/stale provenance described above.
 
-## Deployment
+`/status` covers this service and its authored document. GitHub dependency
+health belongs to each GitHub response's availability metadata.
 
-Deployed on Vercel via `vercel.json`, which routes all paths to `src/api.js`.
+## GitHub response notes
+
+Repository objects contain only fields the portfolio consumes and use
+client-friendly camelCase names. Repositories are deduplicated, exclude forks
+and archived projects, and are ordered by most recent push.
+
+The contribution calendar uses GitHub's contribution data when available and
+resolves to `null` when it cannot be obtained, allowing a client to omit the
+calendar without losing the rest of the page. Public activity includes only
+event kinds the source proves; it does not invent commit counts from push events.
+Private repositories and private activity never appear in these public results.
+
+## Error responses
+
+Unknown paths return a JSON `404` with the requested path and the current
+`availableEndpoints` list. Upstream GitHub failures return a JSON `502` with a
+plain service error; diagnostics stay in server-side logs. Unexpected service
+failures return a JSON `500` without exposing internal details.
+
+Only `GET`, `HEAD`, and `OPTIONS` are accepted. Other methods return JSON `405`
+with an `Allow` header and `allowedMethods`. Invalid declared request lengths
+return `400`; oversized or transfer-encoded requests return JSON `413` with the
+byte limit. Framing is checked before the method, so an oversized `POST` is a
+`413`, not a `405`. Clients that exceed the read limit receive JSON `429` and
+`Retry-After`. A security-state failure returns a generic JSON `503` without
+exposing its internal cause.
+
+When rate state can be evaluated, each non-preflight response publishes
+`RateLimit-Policy`, `RateLimit-Limit`, `RateLimit-Remaining`, and
+`RateLimit-Reset`. Clients should follow those values instead of assuming a
+fixed quota. The service also supplies hardened browser headers,
+`Vary: Origin` on every response, and public read-only CORS without credential
+support.

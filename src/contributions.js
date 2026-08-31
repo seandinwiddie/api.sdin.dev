@@ -11,8 +11,11 @@
  * the calendar when that happens.
  */
 
-const USER = process.env.GITHUB_USER || 'seandinwiddie';
-const TOKEN = process.env.GITHUB_TOKEN;
+const { createBoundedFetch, positiveMilliseconds } = require('./http');
+
+const DEFAULT_USER = process.env.GITHUB_USER || 'seandinwiddie';
+const DEFAULT_TOKEN = process.env.GITHUB_TOKEN;
+const DEFAULT_TIMEOUT_MS = positiveMilliseconds(process.env.GITHUB_REQUEST_TIMEOUT_MS);
 
 const DAY_CELL = /data-date="(\d{4}-\d{2}-\d{2})"[^>]*data-level="(\d)"/g;
 const TOOLTIP = /<tool-tip[^>]*>([^<]*)<\/tool-tip>/g;
@@ -51,18 +54,6 @@ const parseCalendarHtml = (html) => {
   };
 };
 
-const fetchHtmlCalendar = async () => {
-  const response = await fetch(`https://github.com/users/${USER}/contributions`, {
-    headers: { 'User-Agent': 'api.sdin.dev', Accept: 'text/html' },
-  });
-
-  if (!response.ok) {
-    throw new Error(`GitHub contributions responded ${response.status}`);
-  }
-
-  return parseCalendarHtml(await response.text());
-};
-
 const GRAPHQL_QUERY = `query($login:String!){
   user(login:$login){
     contributionsCollection{
@@ -76,49 +67,77 @@ const GRAPHQL_QUERY = `query($login:String!){
 
 const LEVELS = { NONE: 0, FIRST_QUARTILE: 1, SECOND_QUARTILE: 2, THIRD_QUARTILE: 3, FOURTH_QUARTILE: 4 };
 
-const fetchGraphqlCalendar = async () => {
-  const response = await fetch('https://api.github.com/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${TOKEN}`,
-      'User-Agent': 'api.sdin.dev',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query: GRAPHQL_QUERY, variables: { login: USER } }),
-  });
+/**
+ * Builds the contribution effect boundary from explicit dependencies. The
+ * public result remains calendar-or-null so existing consumers keep their
+ * useful contract while the GitHub aggregate supplies availability metadata.
+ */
+const createContributionLoader = ({
+  fetchImpl = globalThis.fetch,
+  user = DEFAULT_USER,
+  token = DEFAULT_TOKEN,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  makeTimeoutSignal,
+  logger = console,
+} = {}) => {
+  const boundedFetch = createBoundedFetch({ fetchImpl, timeoutMs, makeTimeoutSignal });
 
-  if (!response.ok) {
-    throw new Error(`GitHub GraphQL responded ${response.status}`);
-  }
+  const fetchHtmlCalendar = async () => {
+    const response = await boundedFetch(`https://github.com/users/${user}/contributions`, {
+      headers: { 'User-Agent': 'api.sdin.dev', Accept: 'text/html' },
+    });
 
-  const body = await response.json();
-  const calendar = body?.data?.user?.contributionsCollection?.contributionCalendar;
+    if (!response.ok) {
+      throw new Error(`GitHub contributions responded ${response.status}`);
+    }
 
-  if (!calendar) {
-    return null;
-  }
+    return parseCalendarHtml(await response.text());
+  };
 
-  return {
-    days: calendar.weeks.flatMap((week) =>
-      week.contributionDays.map((day) => ({
-        date: day.date,
-        count: day.contributionCount,
-        level: LEVELS[day.contributionLevel] ?? 0,
-      }))
-    ),
-    total: calendar.totalContributions,
-    source: 'graphql',
+  const fetchGraphqlCalendar = async () => {
+    const response = await boundedFetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'User-Agent': 'api.sdin.dev',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: GRAPHQL_QUERY, variables: { login: user } }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub GraphQL responded ${response.status}`);
+    }
+
+    const body = await response.json();
+    const calendar = body?.data?.user?.contributionsCollection?.contributionCalendar;
+
+    return calendar
+      ? {
+          days: calendar.weeks.flatMap((week) =>
+            week.contributionDays.map((day) => ({
+              date: day.date,
+              count: day.contributionCount,
+              level: LEVELS[day.contributionLevel] ?? 0,
+            }))
+          ),
+          total: calendar.totalContributions,
+          source: 'graphql',
+        }
+      : null;
+  };
+
+  /** Resolves to a calendar, or null if it could not be obtained. Never throws. */
+  return async () => {
+    try {
+      return token ? await fetchGraphqlCalendar() : await fetchHtmlCalendar();
+    } catch (error) {
+      logger.warn('Contribution calendar unavailable:', error.message);
+      return null;
+    }
   };
 };
 
-/** Resolves to a calendar, or null if it could not be obtained. Never throws. */
-const loadContributions = async () => {
-  try {
-    return TOKEN ? await fetchGraphqlCalendar() : await fetchHtmlCalendar();
-  } catch (error) {
-    console.warn('Contribution calendar unavailable:', error.message);
-    return null;
-  }
-};
+const loadContributions = createContributionLoader();
 
-module.exports = { loadContributions, parseCalendarHtml };
+module.exports = { createContributionLoader, loadContributions, parseCalendarHtml };

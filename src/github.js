@@ -1,68 +1,165 @@
 /**
  * GitHub aggregation.
  *
- * This is the layer that justifies the API existing at all: it holds the token,
- * absorbs GitHub's rate limit (60 requests/hour unauthenticated) behind a cache,
- * and trims ~100 fields per repo down to the handful the portfolio renders.
- * Callers never talk to GitHub directly.
+ * Effects are supplied once at the boundary. The transformation core stays
+ * pure, cache state stays private to the returned service, and every value
+ * crossing the HTTP boundary is plain serializable data.
  */
+
+const { createContributionLoader } = require('./contributions');
+const { createBoundedFetch, positiveMilliseconds } = require('./http');
 
 const GITHUB_API = 'https://api.github.com';
-const USER = process.env.GITHUB_USER || 'seandinwiddie';
-/** Organisations whose public repos count as this person's work. */
-const ORGS = (process.env.GITHUB_ORGS || 'ForbocAI').split(',').map((o) => o.trim()).filter(Boolean);
-const TOKEN = process.env.GITHUB_TOKEN;
-const CACHE_TTL_MS = Number(process.env.GITHUB_CACHE_TTL_MS || 10 * 60 * 1000);
-const { loadContributions } = require('./contributions');
+const DEFAULT_USER = process.env.GITHUB_USER || 'seandinwiddie';
+const DEFAULT_ORGS = (process.env.GITHUB_ORGS || 'ForbocAI')
+  .split(',')
+  .map((org) => org.trim())
+  .filter(Boolean);
+const DEFAULT_TOKEN = process.env.GITHUB_TOKEN;
+const DEFAULT_CACHE_TTL_MS = positiveMilliseconds(process.env.GITHUB_CACHE_TTL_MS, 10 * 60 * 1000);
+const DEFAULT_REQUEST_TIMEOUT_MS = positiveMilliseconds(process.env.GITHUB_REQUEST_TIMEOUT_MS);
 
-/** Cold-start-local memo. The CDN is the real cache; this spares repeat calls in one instance. */
-const cache = new Map();
+const isoAt = (milliseconds) => new Date(milliseconds).toISOString();
 
-const authHeaders = () => (TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {});
-
-const requestHeaders = () => ({
+const requestHeaders = (token) => ({
   Accept: 'application/vnd.github+json',
   'X-GitHub-Api-Version': '2022-11-28',
-  // GitHub rejects requests without a User-Agent.
   'User-Agent': 'api.sdin.dev',
-  ...authHeaders(),
+  ...(token ? { Authorization: `Bearer ${token}` } : {}),
 });
 
-const fetchJson = async (path) => {
-  const response = await fetch(`${GITHUB_API}${path}`, { headers: requestHeaders() });
-
-  if (!response.ok) {
-    throw new Error(`GitHub ${path} responded ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
+const requestErrorMessage = (path, timeoutMs) => (error) => {
+  const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+  return timedOut
+    ? `GitHub ${path} timed out after ${timeoutMs}ms`
+    : `GitHub ${path} request failed`;
 };
 
-const isFresh = (entry) => Boolean(entry) && entry.expires > Date.now();
+const errorCodeOf = (error) =>
+  /timed out/i.test(error?.message || '') ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_ERROR';
+
+const createGithubRequester = ({ fetchImpl, token, timeoutMs, makeTimeoutSignal }) => {
+  const boundedFetch = createBoundedFetch({ fetchImpl, timeoutMs, makeTimeoutSignal });
+
+  return async (path) => {
+    const response = await boundedFetch(`${GITHUB_API}${path}`, {
+      headers: requestHeaders(token),
+    }).catch((error) => {
+      throw new Error(requestErrorMessage(path, timeoutMs)(error));
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub ${path} responded ${response.status} ${response.statusText}`);
+    }
+
+    return response.json().catch(() => {
+      throw new Error(`GitHub ${path} returned invalid JSON`);
+    });
+  };
+};
+
+const degradedSourcesOf = (value) =>
+  Array.isArray(value?.degradedSources) ? value.degradedSources : [];
+
+const decorateEntry = (entry, context) => {
+  const cached = context.mode !== 'live';
+  const stale = context.mode === 'stale';
+  const degradedSources = context.degradedSources ?? entry.degradedSources;
+  const state = entry.partial ? 'partial' : stale ? 'stale' : context.mode;
+
+  return {
+    ...entry.value,
+    cached,
+    stale,
+    availability: {
+      state,
+      cached,
+      stale,
+      partial: entry.partial,
+      fetchedAt: isoAt(entry.fetchedAt),
+      degradedSources,
+      errorCode: context.errorCode ?? (entry.partial ? 'PARTIAL_UPSTREAM' : null),
+    },
+  };
+};
 
 /**
- * Serves fresh cache, else fetches. If the fetch fails but a stale entry exists,
- * the stale value is served rather than failing the request -- GitHub being down
- * should degrade the portfolio, not break it.
+ * Per-instance TTL cache with stale-on-error and one producer per key. Partial
+ * data may be cached as partial, but never replaces a complete stale value.
  */
-const withCache = async (key, produce) => {
-  const entry = cache.get(key);
+const createResourceCache = ({ now, ttlMs, logger }) => {
+  const entries = new Map();
+  const inFlight = new Map();
 
-  if (isFresh(entry)) {
-    return { ...entry.value, cached: true };
-  }
+  const isFresh = (entry) => Boolean(entry) && entry.expires > now();
 
-  try {
-    const value = await produce();
-    cache.set(key, { value, expires: Date.now() + CACHE_TTL_MS });
-    return { ...value, cached: false };
-  } catch (error) {
-    if (entry) {
-      console.warn(`GitHub fetch failed for ${key}; serving stale cache:`, error.message);
-      return { ...entry.value, cached: true, stale: true };
+  const entryFrom = (value) => {
+    const fetchedAt = now();
+    const degradedSources = degradedSourcesOf(value);
+    return {
+      value,
+      fetchedAt,
+      expires: fetchedAt + ttlMs,
+      partial: degradedSources.length > 0,
+      degradedSources,
+    };
+  };
+
+  const produce = async (key, load) => {
+    const previous = entries.get(key);
+
+    try {
+      const candidate = entryFrom(await load());
+
+      if (candidate.partial && previous && !previous.partial) {
+        logger.warn(`GitHub fetch for ${key} was partial; serving complete stale cache`);
+        return decorateEntry(previous, {
+          mode: 'stale',
+          degradedSources: candidate.degradedSources,
+          errorCode: 'PARTIAL_UPSTREAM',
+        });
+      }
+
+      entries.set(key, candidate);
+      return decorateEntry(candidate, { mode: 'live' });
+    } catch (error) {
+      if (previous) {
+        logger.warn(`GitHub fetch failed for ${key}; serving stale cache:`, error.message);
+        return decorateEntry(previous, {
+          mode: 'stale',
+          errorCode: errorCodeOf(error),
+        });
+      }
+
+      throw error;
     }
-    throw error;
-  }
+  };
+
+  const withCache = async (key, load) => {
+    const entry = entries.get(key);
+
+    if (isFresh(entry)) {
+      return decorateEntry(entry, { mode: 'cached' });
+    }
+
+    const pending = inFlight.get(key);
+    if (pending) {
+      return pending;
+    }
+
+    const request = produce(key, load);
+    inFlight.set(key, request);
+
+    try {
+      return await request;
+    } finally {
+      if (inFlight.get(key) === request) {
+        inFlight.delete(key);
+      }
+    }
+  };
+
+  return { withCache };
 };
 
 const normalizeProfile = (raw) => ({
@@ -77,11 +174,11 @@ const normalizeProfile = (raw) => ({
   followers: raw.followers,
 });
 
-const normalizeRepo = (raw) => ({
+const normalizeRepo = (defaultOwner) => (raw) => ({
   id: String(raw.id),
   name: raw.name,
   fullName: raw.full_name,
-  owner: raw.owner ? raw.owner.login : USER,
+  owner: raw.owner ? raw.owner.login : defaultOwner,
   description: raw.description,
   language: raw.language,
   stars: raw.stargazers_count,
@@ -94,10 +191,16 @@ const normalizeRepo = (raw) => ({
 });
 
 const isOwnWork = (raw) => !raw.fork && !raw.archived;
-
 const byMostRecentlyPushed = (a, b) => b.pushedAt.localeCompare(a.pushedAt);
 
-/** Language -> repo count, most used first. A fold, not a loop. */
+const tally = (events, key) =>
+  Object.entries(events.reduce((acc, event) => ({
+    ...acc,
+    [event[key]]: (acc[event[key]] || 0) + 1,
+  }), {}))
+    .map(([name, count]) => ({ [key]: name, count }))
+    .sort((a, b) => b.count - a.count);
+
 const languageBreakdown = (repos) =>
   Object.entries(
     repos.reduce(
@@ -109,55 +212,16 @@ const languageBreakdown = (repos) =>
     .map(([language, count]) => ({ language, count }))
     .sort((a, b) => b.count - a.count || a.language.localeCompare(b.language));
 
-const loadProfile = async () => ({ profile: normalizeProfile(await fetchJson(`/users/${USER}`)) });
-
-/** One source of repos: the user account, or an organisation they work in. */
-const repoSources = () => [
-  `/users/${USER}/repos?per_page=100&sort=pushed`,
-  ...ORGS.map((org) => `/orgs/${org}/repos?per_page=100&sort=pushed`),
-];
-
-const loadRepos = async () => {
-  // An org being unreachable (renamed, made private) must not lose the rest.
-  const responses = await Promise.all(
-    repoSources().map((path) =>
-      fetchJson(path).catch((error) => {
-        console.warn(`Skipping ${path}:`, error.message);
-        return [];
-      })
-    )
-  );
-
-  const byId = responses
-    .flat()
-    .filter(isOwnWork)
-    .map(normalizeRepo)
-    .reduce((acc, repo) => ({ ...acc, [repo.id]: repo }), {});
-
-  const repos = Object.values(byId).sort(byMostRecentlyPushed);
-  return {
-    repos,
-    languages: languageBreakdown(repos),
-    owners: ownerBreakdown(repos),
-    // Earliest repository creation: the first dated trace of public work.
-    since: repos.reduce(
-      (earliest, r) => (!earliest || r.createdAt < earliest ? r.createdAt : earliest),
-      null
-    ),
-  };
-};
-
-/** Owner -> repo count, so the UI can show org work separately from personal. */
 const ownerBreakdown = (repos) =>
   Object.entries(
-    repos.reduce((counts, repo) => ({ ...counts, [repo.owner]: (counts[repo.owner] || 0) + 1 }), {})
+    repos.reduce((counts, repo) => ({
+      ...counts,
+      [repo.owner]: (counts[repo.owner] || 0) + 1,
+    }), {})
   )
     .map(([owner, count]) => ({ owner, count }))
     .sort((a, b) => b.count - a.count || a.owner.localeCompare(b.owner));
 
-// GitHub's public events feed no longer carries per-push commit counts, so this
-// reports pushes and issue activity -- what the feed actually proves -- rather
-// than inventing a commit number.
 const ACTIVITY_KINDS = {
   PushEvent: 'push',
   IssuesEvent: 'issue',
@@ -174,33 +238,8 @@ const normalizeEvent = (raw) => ({
   at: raw.created_at,
 });
 
-const tally = (events, key) =>
-  Object.entries(events.reduce((acc, e) => ({ ...acc, [e[key]]: (acc[e[key]] || 0) + 1 }), {}))
-    .map(([name, count]) => ({ [key]: name, count }))
-    .sort((a, b) => b.count - a.count);
-
-const loadActivity = async () => {
-  const raw = await fetchJson(`/users/${USER}/events/public?per_page=100`);
-  const events = raw.map(normalizeEvent).filter((e) => e.kind !== null);
-
-  return {
-    events: events.slice(0, 40),
-    byRepo: tally(events, 'repo'),
-    byKind: tally(events, 'kind'),
-    total: events.length,
-    since: events.length ? events[events.length - 1].at : null,
-    until: events.length ? events[0].at : null,
-  };
-};
-
-const getActivity = () => withCache('activity', loadActivity);
-
-// The commit search API is the only single request that returns real commit
-// messages across every repo the author touched, organisations included. The
-// events feed cannot do this -- it dropped per-push commit data.
 const CONVENTIONAL = /^(\w+)(?:\(([^)]+)\))?!?:\s*(.+)$/;
 
-/** Splits a conventional-commit subject into its parts; plain subjects pass through. */
 const parseSubject = (subject) => {
   const match = CONVENTIONAL.exec(subject);
   return match
@@ -220,54 +259,210 @@ const normalizeCommit = (raw) => {
   };
 };
 
-const loadCommits = async () => {
-  const raw = await fetchJson(
-    `/search/commits?q=author:${USER}&sort=author-date&order=desc&per_page=50`
-  );
-  const commits = (raw.items || []).map(normalizeCommit);
+const summaryStateOf = (resources) => {
+  const states = Object.values(resources).map((resource) => resource.state);
+  const rules = [
+    { when: () => states.some((state) => state === 'unavailable' || state === 'partial'), value: 'partial' },
+    { when: () => states.some((state) => state === 'stale'), value: 'stale' },
+    { when: () => states.every((state) => state === 'cached'), value: 'cached' },
+    { when: () => true, value: 'live' },
+  ];
+  return rules.find((rule) => rule.when()).value;
+};
+
+const unavailableCommits = (error, now) => ({
+  commits: [],
+  total: 0,
+  byType: [],
+  cached: false,
+  stale: false,
+  availability: {
+    state: 'unavailable',
+    cached: false,
+    stale: false,
+    partial: true,
+    fetchedAt: isoAt(now()),
+    degradedSources: ['commits'],
+    errorCode: errorCodeOf(error),
+  },
+});
+
+const createGithubService = ({
+  fetchImpl = globalThis.fetch,
+  now = Date.now,
+  user = DEFAULT_USER,
+  orgs = DEFAULT_ORGS,
+  token = DEFAULT_TOKEN,
+  cacheTtlMs = DEFAULT_CACHE_TTL_MS,
+  requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+  makeTimeoutSignal,
+  loadContributionsImpl,
+  logger = console,
+} = {}) => {
+  const ttlMs = positiveMilliseconds(cacheTtlMs, DEFAULT_CACHE_TTL_MS);
+  const timeoutMs = positiveMilliseconds(requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT_MS);
+  const fetchJson = createGithubRequester({ fetchImpl, token, timeoutMs, makeTimeoutSignal });
+  const { withCache } = createResourceCache({ now, ttlMs, logger });
+  const loadContributionCalendar = loadContributionsImpl ?? createContributionLoader({
+    fetchImpl,
+    user,
+    token,
+    timeoutMs,
+    makeTimeoutSignal,
+    logger,
+  });
+
+  const repoSources = () => [
+    `/users/${user}/repos?per_page=100&sort=pushed`,
+    ...orgs.map((org) => `/orgs/${org}/repos?per_page=100&sort=pushed`),
+  ];
+
+  const loadProfile = async () => ({
+    profile: normalizeProfile(await fetchJson(`/users/${user}`)),
+  });
+
+  const loadRepos = async () => {
+    const sources = repoSources();
+    const settled = await Promise.all(
+      sources.map((path) =>
+        fetchJson(path).then(
+          (data) => ({ tag: 'available', path, data }),
+          (error) => ({ tag: 'unavailable', path, error })
+        )
+      )
+    );
+    const failures = settled.filter((result) => result.tag === 'unavailable');
+    failures.forEach(({ path, error }) => logger.warn(`Skipping ${path}:`, error.message));
+
+    if (failures.length === sources.length) {
+      const timedOut = failures.some(({ error }) => errorCodeOf(error) === 'UPSTREAM_TIMEOUT');
+      throw new Error(
+        timedOut
+          ? 'GitHub repository sources timed out'
+          : 'GitHub repository sources unavailable'
+      );
+    }
+
+    const byId = settled
+      .filter((result) => result.tag === 'available')
+      .flatMap((result) => result.data)
+      .filter(isOwnWork)
+      .map(normalizeRepo(user))
+      .reduce((repos, repo) => ({ ...repos, [repo.id]: repo }), {});
+    const repos = Object.values(byId).sort(byMostRecentlyPushed);
+
+    return {
+      repos,
+      languages: languageBreakdown(repos),
+      owners: ownerBreakdown(repos),
+      since: repos.reduce(
+        (earliest, repo) => (!earliest || repo.createdAt < earliest ? repo.createdAt : earliest),
+        null
+      ),
+      degradedSources: failures.map((result) => result.path),
+    };
+  };
+
+  const loadActivity = async () => {
+    const raw = await fetchJson(`/users/${user}/events/public?per_page=100`);
+    const events = raw.map(normalizeEvent).filter((event) => event.kind !== null);
+    return {
+      events: events.slice(0, 40),
+      byRepo: tally(events, 'repo'),
+      byKind: tally(events, 'kind'),
+      total: events.length,
+      since: events.length ? events[events.length - 1].at : null,
+      until: events.length ? events[0].at : null,
+    };
+  };
+
+  const loadCommits = async () => {
+    const raw = await fetchJson(
+      `/search/commits?q=author:${user}&sort=author-date&order=desc&per_page=50`
+    );
+    const commits = (raw.items || []).map(normalizeCommit);
+    return {
+      commits,
+      total: raw.total_count ?? commits.length,
+      byType: tally(commits.filter((commit) => commit.type), 'type'),
+    };
+  };
+
+  const getProfile = () => withCache('profile', loadProfile);
+  const getRepos = () => withCache('repos', loadRepos);
+  const getActivity = () => withCache('activity', loadActivity);
+  const getCommits = () => withCache('commits', loadCommits);
+  const getContributions = () => withCache('contributions', async () => {
+    const contributions = await loadContributionCalendar();
+    return {
+      contributions,
+      degradedSources: contributions === null ? ['contributions'] : [],
+    };
+  });
+
+  const getSummary = async () => {
+    const [profile, repos, activity, contributions, commits] = await Promise.all([
+      getProfile(),
+      getRepos(),
+      getActivity(),
+      getContributions(),
+      getCommits().catch((error) => {
+        logger.warn('Commit search unavailable:', error.message);
+        return unavailableCommits(error, now);
+      }),
+    ]);
+    const resources = {
+      profile: profile.availability,
+      repos: repos.availability,
+      activity: activity.availability,
+      contributions: contributions.availability,
+      commits: commits.availability,
+    };
+    const state = summaryStateOf(resources);
+    const cached = profile.cached && repos.cached && activity.cached;
+    const allResourcesCached = Object.values(resources).every((resource) => resource.cached);
+    const stale = Object.values(resources).some((resource) => resource.stale);
+    const partial = state === 'partial';
+
+    return {
+      profile: profile.profile,
+      repos: repos.repos,
+      languages: repos.languages,
+      owners: repos.owners,
+      since: repos.since,
+      activity,
+      contributions: contributions.contributions,
+      commits,
+      cached,
+      stale,
+      partial,
+      availability: {
+        state,
+        cached: allResourcesCached,
+        stale,
+        partial,
+        checkedAt: isoAt(now()),
+        resources,
+      },
+      authenticated: Boolean(token),
+    };
+  };
+
   return {
-    commits,
-    total: raw.total_count ?? commits.length,
-    byType: tally(commits.filter((c) => c.type), 'type'),
+    getProfile,
+    getRepos,
+    getActivity,
+    getContributions,
+    getCommits,
+    getSummary,
+    cacheTtlMs: ttlMs,
+    requestTimeoutMs: timeoutMs,
   };
 };
 
-const getCommits = () => withCache('commits', loadCommits);
+const defaultService = createGithubService();
 
-// The calendar changes at most once a day, and the HTML path is the expensive
-// one, so it gets a longer life than the REST aggregates.
-const getContributions = () =>
-  withCache('contributions', async () => ({ contributions: await loadContributions() }));
-
-const getProfile = () => withCache('profile', loadProfile);
-const getRepos = () => withCache('repos', loadRepos);
-
-/** Profile, repos and language breakdown in one round trip. */
-const getSummary = async () => {
-  const [profile, repos, activity, contributions, commits] = await Promise.all([
-    getProfile(),
-    getRepos(),
-    getActivity(),
-    getContributions(),
-    // A search-API failure must not take the whole summary down with it.
-    getCommits().catch((error) => {
-      console.warn('Commit search unavailable:', error.message);
-      return { commits: [], total: 0, byType: [] };
-    }),
-  ]);
-  return {
-    profile: profile.profile,
-    repos: repos.repos,
-    languages: repos.languages,
-    owners: repos.owners,
-    since: repos.since,
-    activity,
-    // null when the calendar could not be obtained; the UI omits it.
-    contributions: contributions.contributions,
-    commits,
-    cached: profile.cached && repos.cached && activity.cached,
-    authenticated: Boolean(TOKEN),
-  };
+module.exports = {
+  ...defaultService,
+  createGithubService,
 };
-
-module.exports = { getProfile, getRepos, getActivity, getContributions, getCommits, getSummary, cacheTtlMs: CACHE_TTL_MS };
