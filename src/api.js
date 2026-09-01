@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const github = require('./github');
+const { createEstateObservatoryService } = require('./systems/estateObservatory');
 const { createObservatoryService } = require('./systems/observatory');
 const { createPresenceService } = require('./systems/presence');
 const { createSecurityMiddleware } = require('./security');
@@ -30,6 +31,15 @@ const noStore = (req, res, next) => {
   next();
 };
 
+const logRequestFailure = (logger) => (context) => {
+  try {
+    logger.error('Request failed', Object.freeze(context));
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
+
 const jsonRoute = (load) => async (req, res, next) => {
   try {
     res.json(await load());
@@ -41,7 +51,9 @@ const jsonRoute = (load) => async (req, res, next) => {
 const presence = createPresenceService({
   targets: initialState.presentation.nexus.presences,
 });
-const observatory = createObservatoryService();
+const observatory = createObservatoryService({
+  sites: initialState.presentation.nexus.presences,
+});
 
 const RESERVED_PATHS = new Set([
   '',
@@ -57,14 +69,20 @@ const createApp = ({
   githubService = github,
   observatoryService = observatory,
   presenceService = presence,
+  siteCatalog = initialState.presentation.nexus.presences,
   logger = console,
   now = Date.now,
   securityOptions = {},
 } = {}) => {
   const app = express();
+  const estateObservatoryService = createEstateObservatoryService({
+    sites: siteCatalog,
+    observatoryService,
+    presenceService,
+  });
   app.disable('x-powered-by');
   app.set('trust proxy', false);
-  app.use(...createSecurityMiddleware(securityOptions));
+  app.use(...createSecurityMiddleware({ ...securityOptions, logger }));
   app.use(revalidatePrivately);
 
   app.get('/', (req, res) => {
@@ -104,7 +122,7 @@ const createApp = ({
   });
 
   app.get('/presence', jsonRoute(presenceService.getSummary));
-  app.get('/observatory', jsonRoute(observatoryService.getSummary));
+  app.get('/observatory', jsonRoute(estateObservatoryService.getSummary));
 
   Object.keys(initialState).forEach((key) => {
     if (RESERVED_PATHS.has(key)) {
@@ -138,7 +156,10 @@ const createApp = ({
 
   app.use((error, req, res, next) => {
     const isUpstream = /^GitHub /.test(error.message || '');
-    logger.error(isUpstream ? 'Upstream GitHub failure:' : 'Unhandled error:', error);
+    logRequestFailure(logger)({
+      event: isUpstream ? 'upstream_unavailable' : 'internal_failure',
+      requestId: res.locals.securityRequestId ?? null,
+    });
     noStoreResponse(res).status(isUpstream ? 502 : 500).json({
       error: isUpstream ? 'Upstream Unavailable' : 'Internal Server Error',
     });

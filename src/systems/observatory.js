@@ -111,8 +111,13 @@ const normalizeSearchConsoleSiteUrl = (value) => {
   return supported ? candidate : null;
 };
 
-const observatoryConfigOf = ({ config = {}, env = process.env } = {}) => {
+const observatoryConfigOf = ({
+  config = {},
+  env = process.env,
+  sites = [],
+} = {}) => {
   const read = configuredValue(config, env);
+  const sitesById = Object.fromEntries(sites.map((site) => [site.id, site]));
   const oauth = Object.fromEntries(
     Object.entries(OAUTH_CONFIG_KEYS).map(([field, key]) => [field, read(key)])
   );
@@ -125,8 +130,8 @@ const observatoryConfigOf = ({ config = {}, env = process.env } = {}) => {
     channels: Object.freeze(
       OBSERVATORY_CHANNELS.map((channel) =>
         Object.freeze({
-          id: channel.id,
-          label: channel.label,
+          id: channel.siteId,
+          label: sitesById[channel.siteId]?.label ?? channel.siteId,
           analyticsPropertyId: normalizeAnalyticsPropertyId(
             read(channel.analyticsKey)
           ),
@@ -659,6 +664,7 @@ const observeChannel = (context) => async (channel) => {
 const createObservatoryService = ({
   config = {},
   env = process.env,
+  sites = [],
   fetchImpl = globalThis.fetch,
   now = Date.now,
   cacheTtlMs = DEFAULT_OBSERVATORY_CACHE_TTL_MS,
@@ -670,7 +676,7 @@ const createObservatoryService = ({
     preferCandidate: preferObservatoryCandidate,
   }),
 } = {}) => {
-  const configuration = observatoryConfigOf({ config, env });
+  const configuration = observatoryConfigOf({ config, env, sites });
   const boundedFetch = createBoundedFetch({
     fetchImpl,
     timeoutMs: requestTimeoutMs,

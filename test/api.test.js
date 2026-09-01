@@ -145,6 +145,20 @@ describe('api.sdin.dev', () => {
       startDate: '2026-08-03',
       endDate: '2026-08-30',
     });
+    assert.deepEqual(
+      body.estates.map(({ id, url }) => ({ id, url })),
+      initialState.presentation.nexus.presences.map(({ id, url }) => ({ id, url }))
+    );
+    assert.equal(
+      body.estates.find(({ id }) => id === 'registry').capabilities.presence
+        .availability,
+      'operational'
+    );
+    assert.equal(
+      body.estates.find(({ id }) => id === 'forboc').capabilities.analytics
+        .availability,
+      'not-instrumented'
+    );
   });
 
   test('every initial-state key gets its own endpoint', async () => {
@@ -268,7 +282,12 @@ describe('api.sdin.dev', () => {
     assert.equal(typeof body.presentation.observatory.metrics.clicks, 'string');
     assert.deepEqual(
       body.presentation.nexus.presences.find(({ id }) => id === 'forboc'),
-      { id: 'forboc', url: 'https://forboc.ai', label: 'Forboc.ai' }
+      {
+        id: 'forboc',
+        url: 'https://forboc.ai',
+        label: 'Forboc.ai',
+        capabilities: { presence: true, analytics: false, searchConsole: false },
+      }
     );
     assert.deepEqual(
       body.presentation.nexus.presences.find(({ id }) => id === 'lectures'),
@@ -276,6 +295,7 @@ describe('api.sdin.dev', () => {
         id: 'lectures',
         url: 'https://seandinwiddie.github.io/lectures/',
         label: 'Lectures',
+        capabilities: { presence: true, analytics: false, searchConsole: false },
       }
     );
     assert.deepEqual(
@@ -286,6 +306,7 @@ describe('api.sdin.dev', () => {
         id: 'functional-programming-library',
         url: 'https://www.npmjs.com/package/functional-programming-composition',
         label: 'Functional Programming Library',
+        capabilities: { presence: true, analytics: false, searchConsole: false },
       }
     );
     assert.ok(Array.isArray(body.presentation.utilityRail.links));
@@ -313,6 +334,14 @@ describe('api.sdin.dev', () => {
     assert.equal(typeof body.presentation.runtime.archiveControl.commands.help[0], 'string');
     assert.equal(typeof body.presentation.runtime.dossier.stats.repositories, 'string');
     assert.equal(typeof body.presentation.runtime.telemetry.statement, 'string');
+    assert.equal(
+      body.presentation.runtime.telemetry.labels.feed,
+      'GH + GOOGLE LIVE'
+    );
+    assert.equal(
+      body.presentation.runtime.telemetry.values.store,
+      '6 slices · rtk query'
+    );
     assert.match(body.presentation.metadata.defaultDescription, /active missions/);
     assert.match(body.presentation.metadata.routes.telemetry.description, /system state/);
     assert.doesNotMatch(
@@ -378,6 +407,7 @@ describe('api.sdin.dev', () => {
   });
 
   test('upstream and internal failures are uncached without leaking server details', async (t) => {
+    const errorLogs = [];
     const failureService = {
       ...githubService,
       getProfile: async () => { throw new Error('GitHub private upstream detail'); },
@@ -388,7 +418,9 @@ describe('api.sdin.dev', () => {
     };
     const failureBaseUrl = await startTestApp(t, createApp({
       githubService: failureService,
-      logger: { error: () => undefined },
+      logger: {
+        error: (...entry) => errorLogs.push(entry),
+      },
     }));
     const upstreamResponse = await fetch(`${failureBaseUrl}/github/profile`);
     const internalResponse = await fetch(`${failureBaseUrl}/github/repos`);
@@ -398,6 +430,14 @@ describe('api.sdin.dev', () => {
     const upstreamText = await upstreamResponse.text();
     const internalText = await internalResponse.text();
     const malformedUpstreamText = await malformedUpstreamResponse.text();
+
+    const loggerFailureBaseUrl = await startTestApp(t, createApp({
+      githubService: failureService,
+      logger: {
+        error: () => { throw new Error('logger unavailable'); },
+      },
+    }));
+    const loggerFailureResponse = await fetch(`${loggerFailureBaseUrl}/github/repos`);
 
     assert.equal(upstreamResponse.status, 502);
     assert.match(upstreamResponse.headers.get('cache-control'), /no-store/);
@@ -411,6 +451,18 @@ describe('api.sdin.dev', () => {
     assert.match(malformedUpstreamResponse.headers.get('cache-control'), /no-store/);
     assert.deepEqual(JSON.parse(malformedUpstreamText), {
       error: 'Upstream Unavailable',
+    });
+    assert.equal(errorLogs.length, 3);
+    errorLogs.forEach(([message, context]) => {
+      assert.equal(message, 'Request failed');
+      assert.deepEqual(Object.keys(context).sort(), ['event', 'requestId']);
+      assert.match(context.requestId, /^[0-9a-f-]{36}$/u);
+    });
+    const loggedText = JSON.stringify(errorLogs);
+    assert.doesNotMatch(loggedText, /private|incomplete|stack|Error/u);
+    assert.equal(loggerFailureResponse.status, 500);
+    assert.deepEqual(await loggerFailureResponse.json(), {
+      error: 'Internal Server Error',
     });
   });
 

@@ -23,14 +23,12 @@ const OAUTH_CONFIG_KEYS = Object.freeze({
 
 const OBSERVATORY_CHANNELS = Object.freeze([
   Object.freeze({
-    id: 'sdin-dev',
-    label: 'sdin.dev',
+    siteId: 'registry',
     analyticsKey: 'GA4_SDIN_DEV_PROPERTY_ID',
     searchConsoleKey: 'GSC_SDIN_DEV_SITE_URL',
   }),
   Object.freeze({
-    id: 'seandinwiddie-com',
-    label: 'seandinwiddie.com',
+    siteId: 'personal',
     analyticsKey: 'GA4_SEANDINWIDDIE_COM_PROPERTY_ID',
     searchConsoleKey: 'GSC_SEANDINWIDDIE_COM_SITE_URL',
   }),

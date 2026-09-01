@@ -14,6 +14,9 @@ run_gate() {
 }
 
 run_gate "node tests" npm test
+run_gate "authored data authority" npm run check:data-authority
+run_gate "security policy and secrets" npm run check:security
+run_gate "production dependencies" npm run check:dependencies
 run_gate "source syntax" npm run check:syntax
 run_gate "whitespace" git diff --check
 

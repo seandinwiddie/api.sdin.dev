@@ -490,8 +490,8 @@ describe('public Google observatory', () => {
     assert.deepEqual(
       result.properties.map(({ id, availability }) => ({ id, availability })),
       [
-        { id: 'sdin-dev', availability: 'unconfigured' },
-        { id: 'seandinwiddie-com', availability: 'unconfigured' },
+        { id: 'registry', availability: 'unconfigured' },
+        { id: 'personal', availability: 'unconfigured' },
       ]
     );
   });

@@ -124,8 +124,9 @@ response. Short-lived access tokens stay inside the server-side effect boundary.
 
 Unknown paths return a JSON `404` with the requested path and the current
 `availableEndpoints` list. Upstream GitHub failures return a JSON `502` with a
-plain service error; diagnostics stay in server-side logs. Unexpected service
-failures return a JSON `500` without exposing internal details.
+plain service error; a server-generated request ID correlates the response with
+sanitized server-side events. Unexpected service failures return a JSON `500`
+without exposing internal details.
 
 Only `GET`, `HEAD`, and `OPTIONS` are accepted. Other methods return JSON `405`
 with an `Allow` header and `allowedMethods`. Invalid declared request lengths
@@ -135,9 +136,17 @@ byte limit. Framing is checked before the method, so an oversized `POST` is a
 `Retry-After`. A security-state failure returns a generic JSON `503` without
 exposing its internal cause.
 
-When rate state can be evaluated, each non-preflight response publishes
+The request perimeter also returns JSON `421` for an unrecognized authority,
+`400` for a malformed or overlong request target, `403` for a malformed Origin
+or an Origin denied by restricted mode, `406` when `Accept` excludes JSON, and
+`415` when a supplied `Content-Type` is not JSON. Requests without an Origin
+remain valid native/server clients. Public browser reads remain intentionally
+non-credentialed and receive wildcard CORS after their Origin is structurally
+validated.
+
+When rate state can be evaluated, every request, including preflight, publishes
 `RateLimit-Policy`, `RateLimit-Limit`, `RateLimit-Remaining`, and
 `RateLimit-Reset`. Clients should follow those values instead of assuming a
-fixed quota. The service also supplies hardened browser headers,
-`Vary: Origin` on every response, and public read-only CORS without credential
-support.
+fixed quota. Each response also carries a service-generated `X-Request-ID`,
+hardened browser-feature and transport headers, explicit shared-CDN `no-store`,
+`Vary: Origin`, and public read-only CORS without credential support.

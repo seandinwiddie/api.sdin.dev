@@ -131,32 +131,62 @@
         {
           "id": "forboc",
           "url": "https://forboc.ai",
-          "label": "Forboc.ai"
+          "label": "Forboc.ai",
+          "capabilities": {
+            "presence": true,
+            "analytics": false,
+            "searchConsole": false
+          }
         },
         {
           "id": "lectures",
           "url": "https://seandinwiddie.github.io/lectures/",
-          "label": "Lectures"
+          "label": "Lectures",
+          "capabilities": {
+            "presence": true,
+            "analytics": false,
+            "searchConsole": false
+          }
         },
         {
           "id": "functional-programming-library",
           "url": "https://www.npmjs.com/package/functional-programming-composition",
-          "label": "Functional Programming Library"
+          "label": "Functional Programming Library",
+          "capabilities": {
+            "presence": true,
+            "analytics": false,
+            "searchConsole": false
+          }
         },
         {
           "id": "personal",
           "url": "https://seandinwiddie.com",
-          "label": "seandinwiddie.com"
+          "label": "seandinwiddie.com",
+          "capabilities": {
+            "presence": true,
+            "analytics": true,
+            "searchConsole": true
+          }
         },
         {
           "id": "registry",
           "url": "https://sdin.dev",
-          "label": "sdin.dev"
+          "label": "sdin.dev",
+          "capabilities": {
+            "presence": true,
+            "analytics": true,
+            "searchConsole": true
+          }
         },
         {
           "id": "github-pages",
           "url": "https://seandinwiddie.github.io",
-          "label": "seandinwiddie.github.io"
+          "label": "seandinwiddie.github.io",
+          "capabilities": {
+            "presence": true,
+            "analytics": false,
+            "searchConsole": false
+          }
         }
       ]
     },
@@ -262,6 +292,165 @@
         "disabledText": "SOUND OFF",
         "enableLabel": "Enable interface sounds",
         "disableLabel": "Disable interface sounds"
+      },
+      "resourceCatalog": {
+        "version": 1,
+        "resources": [
+          {
+            "id": "service-root",
+            "method": "GET",
+            "path": "/",
+            "domain": "service",
+            "portfolio": false
+          },
+          {
+            "id": "service-status",
+            "method": "GET",
+            "path": "/status",
+            "domain": "service",
+            "portfolio": true
+          },
+          {
+            "id": "authored-document",
+            "method": "GET",
+            "path": "/data",
+            "domain": "registry",
+            "portfolio": true
+          },
+          {
+            "id": "observatory-summary",
+            "method": "GET",
+            "path": "/observatory",
+            "domain": "observatory",
+            "portfolio": true
+          },
+          {
+            "id": "presence-summary",
+            "method": "GET",
+            "path": "/presence",
+            "domain": "presence",
+            "portfolio": true
+          },
+          {
+            "id": "github-summary",
+            "method": "GET",
+            "path": "/github",
+            "domain": "github",
+            "portfolio": true
+          },
+          {
+            "id": "github-profile",
+            "method": "GET",
+            "path": "/github/profile",
+            "domain": "github",
+            "portfolio": false
+          },
+          {
+            "id": "github-repositories",
+            "method": "GET",
+            "path": "/github/repos",
+            "domain": "github",
+            "portfolio": false
+          },
+          {
+            "id": "github-activity",
+            "method": "GET",
+            "path": "/github/activity",
+            "domain": "github",
+            "portfolio": false
+          },
+          {
+            "id": "github-contributions",
+            "method": "GET",
+            "path": "/github/contributions",
+            "domain": "github",
+            "portfolio": false
+          },
+          {
+            "id": "github-commits",
+            "method": "GET",
+            "path": "/github/commits",
+            "domain": "commit-archive",
+            "portfolio": true
+          },
+          {
+            "id": "authored-bdd-tests",
+            "method": "GET",
+            "path": "/bddTests",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-brand-name",
+            "method": "GET",
+            "path": "/brandName",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-description",
+            "method": "GET",
+            "path": "/description",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-presentation",
+            "method": "GET",
+            "path": "/presentation",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-initial-theme",
+            "method": "GET",
+            "path": "/iniTheme",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-registry-capabilities",
+            "method": "GET",
+            "path": "/registryCapabilities",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-operating-protocols",
+            "method": "GET",
+            "path": "/operatingProtocols",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-theme-toggle",
+            "method": "GET",
+            "path": "/themeToggle",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-custom-theme",
+            "method": "GET",
+            "path": "/themeCustom",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-ambient-scene",
+            "method": "GET",
+            "path": "/ambientScene",
+            "domain": "authored-slice",
+            "portfolio": false
+          },
+          {
+            "id": "authored-dossier",
+            "method": "GET",
+            "path": "/dossier",
+            "domain": "authored-slice",
+            "portfolio": false
+          }
+        ]
       },
       "errorBoundary": {
         "headline": "Registry signal interrupted",
@@ -476,7 +665,7 @@
           "lastAction": "last action",
           "reducedMotion": "reduced motion",
           "viewport": "viewport",
-          "feed": "github feed",
+          "feed": "GH + GOOGLE LIVE",
           "theme": "theme"
         },
         "values": {
@@ -486,7 +675,7 @@
           "units": "units",
           "loaded": "loaded",
           "actions": "actions",
-          "store": "5 slices · rtk query",
+          "store": "6 slices · rtk query",
           "noneYet": "none yet",
           "respected": "respected",
           "notRequested": "not requested",

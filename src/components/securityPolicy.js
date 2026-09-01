@@ -5,6 +5,10 @@ const REQUIRED_ORIGINS = Object.freeze([
   'https://sdin.dev',
 ]);
 
+const REQUIRED_HOSTS = Object.freeze([
+  'api.sdin.dev',
+]);
+
 const LOCAL_DEVELOPMENT_HOSTS = Object.freeze([
   'localhost',
   '127.0.0.1',
@@ -25,7 +29,30 @@ const CORS_EXPOSED_HEADERS = Object.freeze([
   'RateLimit-Remaining',
   'RateLimit-Reset',
   'Retry-After',
+  'X-Request-ID',
 ]);
+
+const PERMISSIONS_POLICY = Object.freeze([
+  'accelerometer=()',
+  'ambient-light-sensor=()',
+  'autoplay=()',
+  'camera=()',
+  'display-capture=()',
+  'encrypted-media=()',
+  'fullscreen=()',
+  'geolocation=()',
+  'gyroscope=()',
+  'magnetometer=()',
+  'microphone=()',
+  'midi=()',
+  'payment=()',
+  'picture-in-picture=()',
+  'publickey-credentials-get=()',
+  'screen-wake-lock=()',
+  'usb=()',
+  'web-share=()',
+  'xr-spatial-tracking=()',
+]).join(', ');
 
 const DEFAULT_SECURITY_POLICY = Object.freeze({
   clientIpSource: 'socket',
@@ -33,7 +60,11 @@ const DEFAULT_SECURITY_POLICY = Object.freeze({
     allowPublicRead: true,
     maxAgeSeconds: 86_400,
   }),
+  hosts: Object.freeze({
+    allowVercelPreviews: true,
+  }),
   maxRequestBytes: 16_384,
+  maxRequestTargetBytes: 2_048,
   rateLimit: Object.freeze({
     limit: 120,
     windowMs: 60_000,
@@ -52,6 +83,13 @@ const HELMET_OPTIONS = Object.freeze({
     }),
   }),
   crossOriginResourcePolicy: Object.freeze({ policy: 'cross-origin' }),
+  frameguard: Object.freeze({ action: 'deny' }),
+  hsts: Object.freeze({
+    maxAge: 31_536_000,
+    includeSubDomains: true,
+    preload: true,
+  }),
+  referrerPolicy: Object.freeze({ policy: 'no-referrer' }),
 });
 
 module.exports = {
@@ -61,5 +99,7 @@ module.exports = {
   DEFAULT_SECURITY_POLICY,
   HELMET_OPTIONS,
   LOCAL_DEVELOPMENT_HOSTS,
+  PERMISSIONS_POLICY,
+  REQUIRED_HOSTS,
   REQUIRED_ORIGINS,
 };

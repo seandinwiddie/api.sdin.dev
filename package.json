@@ -7,7 +7,11 @@
     "start": "node src/api.js",
     "dev": "node --watch src/api.js",
     "test": "node --test",
-    "check:syntax": "find src test -type f -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "check:data-authority": "node scripts/check-data-authority.js",
+    "check:dependencies": "npm audit --omit=dev --audit-level=low",
+    "check:portfolio-contract": "node scripts/check-data-authority.js --portfolio-root ../portfolio",
+    "check:security": "node scripts/check-security.js",
+    "check:syntax": "find src test scripts -type f -name '*.js' -print0 | xargs -0 -n1 node --check",
     "verify": "bash scripts/verify-all.sh"
   },
   "keywords": [

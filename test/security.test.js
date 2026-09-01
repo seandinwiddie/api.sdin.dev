@@ -13,9 +13,24 @@ const vercelConfig = require('../vercel.json');
 const {
   originDecision,
   parseOrigin,
+  rateLimitDecisionIsValid,
   requestSizeDecision,
   securityPolicyFrom,
+  securityValuesValidationFrom,
 } = require('../src/security');
+const {
+  acceptDecision,
+  authorityDecision,
+  contentTypeDecision,
+  parseHost,
+  requestIdDecision,
+  requestTargetDecision,
+} = require('../src/systems/securityPerimeter');
+
+const quietLogger = Object.freeze({
+  error: () => undefined,
+  warn: () => undefined,
+});
 
 const closeServer = (server) =>
   new Promise((resolve, reject) =>
@@ -24,7 +39,10 @@ const closeServer = (server) =>
 
 const startApp = async (t, securityOptions = {}) => {
   const server = await new Promise((resolve) => {
-    const listening = createApp({ securityOptions }).listen(0, () => resolve(listening));
+    const listening = createApp({
+      logger: quietLogger,
+      securityOptions,
+    }).listen(0, () => resolve(listening));
   });
   t.after(() => closeServer(server));
   return server;
@@ -99,10 +117,13 @@ describe('security policy core', () => {
   test('environment policy values are validated and composed with required origins', () => {
     const policy = securityPolicyFrom({
       env: {
-        API_CORS_ORIGINS: 'https://one.example, https://two.example/path',
+        API_ALLOWED_HOSTS: 'api.internal.example',
+        API_ALLOW_VERCEL_PREVIEWS: 'false',
+        API_CORS_ORIGINS: 'https://one.example',
         API_CORS_PUBLIC_READ: 'false',
         API_CLIENT_IP_SOURCE: 'vercel',
         API_MAX_REQUEST_BYTES: '2048',
+        API_MAX_REQUEST_TARGET_BYTES: '1024',
         API_RATE_LIMIT_MAX: '7',
         API_RATE_LIMIT_WINDOW_MS: '2500',
         API_RATE_LIMIT_MAX_CLIENTS: '40',
@@ -116,12 +137,104 @@ describe('security policy core', () => {
       'https://sdin.dev',
       'https://one.example',
     ]);
+    assert.deepEqual(policy.hosts, {
+      allowedHosts: [
+        'api.sdin.dev',
+        'localhost',
+        '127.0.0.1',
+        '[::1]',
+        'api.internal.example',
+      ],
+      allowVercelPreviews: false,
+    });
     assert.equal(policy.maxRequestBytes, 2048);
+    assert.equal(policy.maxRequestTargetBytes, 1024);
     assert.deepEqual(policy.rateLimit, {
       limit: 7,
       windowMs: 2500,
       maxClients: 40,
     });
+  });
+
+  test('invalid explicit security configuration accumulates failures and cannot start', () => {
+    const validation = securityValuesValidationFrom({
+      env: {
+        API_ALLOWED_HOSTS: 'https://not-a-host.example/path',
+        API_CORS_ORIGINS: 'https://client.example/path',
+        API_CORS_PUBLIC_READ: 'sometimes',
+        API_CLIENT_IP_SOURCE: 'forwarded-for',
+        API_MAX_REQUEST_BYTES: '-1',
+        API_RATE_LIMIT_MAX: '0',
+      },
+    });
+
+    assert.equal(validation._tag, 'Failure');
+    assert.deepEqual(validation.errors, [
+      'API_CLIENT_IP_SOURCE',
+      'API_CORS_PUBLIC_READ',
+      'API_CORS_ORIGINS',
+      'API_ALLOWED_HOSTS',
+      'API_MAX_REQUEST_BYTES',
+      'API_RATE_LIMIT_MAX',
+    ]);
+    assert.throws(
+      () => securityPolicyFrom({
+        env: {
+          API_CORS_PUBLIC_READ: 'sometimes',
+          API_MAX_REQUEST_BYTES: 'invalid',
+        },
+      }),
+      /Invalid security configuration: API_CORS_PUBLIC_READ, API_MAX_REQUEST_BYTES/u
+    );
+  });
+
+  test('request perimeter admits only unveiled hosts, bounded targets, and JSON negotiation', () => {
+    const hostPolicy = securityPolicyFrom({ env: {} }).hosts;
+
+    assert.deepEqual(parseHost('api.sdin.dev:443'), {
+      tag: 'valid',
+      hostname: 'api.sdin.dev',
+      port: '443',
+    });
+    assert.equal(authorityDecision(hostPolicy)('api.sdin.dev').tag, 'allowed');
+    assert.equal(authorityDecision(hostPolicy)('api-preview.vercel.app').tag, 'allowed');
+    assert.equal(authorityDecision(hostPolicy)('api.sdin.dev.attacker.example').status, 421);
+    assert.deepEqual(parseHost('2130706433'), { tag: 'invalid' });
+    assert.equal(requestTargetDecision(32)('/data?fresh=1').tag, 'allowed');
+    assert.equal(requestTargetDecision(8)('/12345678').status, 400);
+    assert.equal(requestTargetDecision(32)('//attacker.example/data').status, 400);
+    assert.equal(requestTargetDecision(32)('/bad%zz').status, 400);
+    assert.equal(requestTargetDecision(32)('/bad%00target').status, 400);
+    assert.equal(requestTargetDecision(32)('/bad%5ctarget').status, 400);
+    assert.equal(requestTargetDecision(32)('/one//two').status, 400);
+    assert.equal(requestTargetDecision(32)('/one/../data').status, 400);
+    assert.equal(requestTargetDecision(32)('/%64ata').status, 400);
+    assert.equal(requestTargetDecision(32)('/data?x=%00').status, 400);
+    assert.equal(acceptDecision('application/json').tag, 'allowed');
+    assert.equal(acceptDecision('text/html').status, 406);
+    assert.equal(acceptDecision('application/json;q=0').status, 406);
+    assert.equal(contentTypeDecision('application/json; charset=utf-8').tag, 'allowed');
+    assert.equal(contentTypeDecision('text/plain').status, 415);
+  });
+
+  test('request IDs and rate decisions fail closed when an invariant is missing', () => {
+    const policy = { limit: 2 };
+    const validDecision = {
+      allowed: true,
+      observedAt: 0,
+      remaining: 1,
+      resetAt: 1000,
+    };
+
+    assert.equal(
+      requestIdDecision(() => '123e4567-e89b-42d3-a456-426614174000').tag,
+      'allowed'
+    );
+    assert.equal(requestIdDecision(() => 'attacker-controlled').status, 503);
+    assert.equal(requestIdDecision(() => { throw new Error('entropy unavailable'); }).status, 503);
+    assert.equal(rateLimitDecisionIsValid(policy)(validDecision), true);
+    assert.equal(rateLimitDecisionIsValid(policy)({ ...validDecision, remaining: 3 }), false);
+    assert.equal(rateLimitDecisionIsValid(policy)({ ...validDecision, resetAt: -1 }), false);
   });
 
   test('Vercel deployment explicitly selects its trusted client-IP boundary', () => {
@@ -192,11 +305,23 @@ describe('security HTTP boundary', () => {
 
     assert.equal(response.status, 200);
     assert.equal(response.headers['x-powered-by'], undefined);
+    assert.match(response.headers['content-type'], /^application\/json; charset=utf-8/u);
     assert.match(response.headers['content-security-policy'], /default-src 'none'/u);
+    assert.equal(response.headers['cross-origin-opener-policy'], 'same-origin');
     assert.equal(response.headers['cross-origin-resource-policy'], 'cross-origin');
+    assert.equal(response.headers['origin-agent-cluster'], '?1');
     assert.equal(response.headers['x-content-type-options'], 'nosniff');
-    assert.equal(response.headers['x-frame-options'], 'SAMEORIGIN');
-    assert.match(response.headers['strict-transport-security'], /max-age=/u);
+    assert.equal(response.headers['x-frame-options'], 'DENY');
+    assert.match(response.headers['strict-transport-security'], /max-age=31536000/u);
+    assert.match(response.headers['strict-transport-security'], /includeSubDomains/u);
+    assert.match(response.headers['strict-transport-security'], /preload/u);
+    assert.equal(response.headers['referrer-policy'], 'no-referrer');
+    assert.match(response.headers['permissions-policy'], /camera=\(\)/u);
+    assert.equal(response.headers['cdn-cache-control'], 'no-store');
+    assert.equal(response.headers['vercel-cdn-cache-control'], 'no-store');
+    assert.match(response.headers['x-request-id'], /^[0-9a-f-]{36}$/u);
+    assert.match(response.headers['access-control-expose-headers'], /X-Request-ID/u);
+    assert.equal(response.headers['x-permitted-cross-domain-policies'], 'none');
     assert.equal(response.headers['x-xss-protection'], '0');
   });
 
@@ -218,12 +343,14 @@ describe('security HTTP boundary', () => {
     assert.equal(nativeRead.status, 200);
     assert.equal(nativeRead.headers['access-control-allow-origin'], '*');
     assert.match(nativeRead.headers.vary, /Origin/u);
-    assert.equal(opaqueOrigin.status, 200);
+    assert.equal(opaqueOrigin.status, 403);
     assert.equal(opaqueOrigin.headers['access-control-allow-origin'], undefined);
+    assert.equal(opaqueOrigin.headers['ratelimit-limit'], '120');
+    assert.deepEqual(opaqueOrigin.body, { error: 'Forbidden' });
     assert.match(opaqueOrigin.headers.vary, /Origin/u);
   });
 
-  test('restricted CORS reflects allowed origins and omits headers for denied origins', async (t) => {
+  test('restricted CORS reflects allowed origins and fails closed for denied origins', async (t) => {
     const server = await startApp(t, {
       cors: {
         allowPublicRead: false,
@@ -249,9 +376,11 @@ describe('security HTTP boundary', () => {
       assert.equal(response.status, 200);
       assert.equal(response.headers['access-control-allow-origin'], origins[index]);
     });
-    assert.equal(denied.status, 200);
+    assert.equal(denied.status, 403);
     assert.equal(denied.headers['access-control-allow-origin'], undefined);
+    assert.equal(denied.headers['ratelimit-limit'], '120');
     assert.match(denied.headers.vary, /Origin/u);
+    assert.deepEqual(denied.body, { error: 'Forbidden' });
     assert.equal(nativeRead.status, 200);
     assert.equal(nativeRead.headers['access-control-allow-origin'], undefined);
     assert.match(nativeRead.headers.vary, /Origin/u);
@@ -289,10 +418,74 @@ describe('security HTTP boundary', () => {
     assert.equal(allowed.headers['access-control-allow-origin'], 'https://portfolio.sdin.dev');
     assert.match(allowed.headers['access-control-allow-methods'], /GET/u);
     assert.match(allowed.headers['access-control-allow-methods'], /HEAD/u);
-    assert.equal(denied.status, 204);
+    assert.equal(denied.status, 403);
     assert.equal(denied.headers['access-control-allow-origin'], undefined);
+    assert.equal(denied.headers['ratelimit-limit'], '120');
     assert.equal(unsupported.status, 405);
     assert.equal(unsupported.headers.allow, 'GET, HEAD, OPTIONS');
+  });
+
+  test('rejects authority, target, and representation capabilities outside the perimeter', async (t) => {
+    const server = await startApp(t, { maxRequestTargetBytes: 8 });
+    const wrongAuthority = await request(server)({
+      path: '/data',
+      headers: { Host: 'api.sdin.dev.attacker.example' },
+    });
+    const longTarget = await request(server)({ path: '/request-target-is-too-long' });
+    const unacceptable = await request(server)({
+      path: '/data',
+      headers: { Accept: 'text/html' },
+    });
+    const unsupportedMedia = await request(server)({
+      path: '/data',
+      headers: { 'Content-Type': 'text/plain' },
+    });
+
+    assert.equal(wrongAuthority.status, 421);
+    assert.deepEqual(wrongAuthority.body, { error: 'Misdirected Request' });
+    assert.equal(longTarget.status, 400);
+    assert.deepEqual(longTarget.body, { error: 'Bad Request' });
+    assert.equal(unacceptable.status, 406);
+    assert.deepEqual(unacceptable.body, { error: 'Not Acceptable' });
+    assert.equal(unsupportedMedia.status, 415);
+    assert.deepEqual(unsupportedMedia.body, { error: 'Unsupported Media Type' });
+    [wrongAuthority, longTarget, unacceptable, unsupportedMedia].forEach((response) => {
+      assert.match(response.headers['cache-control'], /no-store/u);
+      assert.match(response.headers['x-request-id'], /^[0-9a-f-]{36}$/u);
+    });
+  });
+
+  test('rate limits preflights and fails closed when request identity cannot be created', async (t) => {
+    const rateServer = await startApp(t, {
+      clientKey: () => 'one-client',
+      rateLimit: { limit: 1, windowMs: 1000, maxClients: 2 },
+    });
+    const accepted = await request(rateServer)({ path: '/status' });
+    const blockedPreflight = await request(rateServer)({
+      method: 'OPTIONS',
+      path: '/data',
+      headers: {
+        Origin: 'https://portfolio.sdin.dev',
+        'Access-Control-Request-Method': 'GET',
+      },
+    });
+    const identityServer = await startApp(t, {
+      createRequestId: () => 'invalid',
+    });
+    const identityFailure = await request(identityServer)({ path: '/status' });
+
+    assert.equal(accepted.status, 200);
+    assert.equal(blockedPreflight.status, 429);
+    assert.equal(blockedPreflight.headers['access-control-allow-origin'], '*');
+    assert.deepEqual(blockedPreflight.body, {
+      error: 'Too Many Requests',
+      retryAfterSeconds: 1,
+    });
+    assert.equal(identityFailure.status, 503);
+    assert.deepEqual(identityFailure.body, { error: 'Service Unavailable' });
+    assert.equal(identityFailure.headers['x-request-id'], undefined);
+    assert.match(identityFailure.headers['permissions-policy'], /camera=\(\)/u);
+    assert.equal(identityFailure.headers['vercel-cdn-cache-control'], 'no-store');
   });
 
   test('rejects unsupported methods with a JSON 405 and Allow contract', async (t) => {
@@ -456,9 +649,46 @@ describe('security HTTP boundary', () => {
     });
     const failed = await request(failingServer)({ path: '/status' });
 
+    const malformedServer = await startApp(t, {
+      rateLimitStore: {
+        consume: () => ({
+          allowed: true,
+          observedAt: 0,
+          remaining: 10_000,
+          resetAt: 1000,
+        }),
+      },
+    });
+    const malformed = await request(malformedServer)({ path: '/status' });
+
     assert.equal(failed.status, 503);
     assert.deepEqual(failed.body, { error: 'Service Unavailable' });
     assert.doesNotMatch(failed.text, /private store detail/u);
+    assert.equal(malformed.status, 503);
+    assert.deepEqual(malformed.body, { error: 'Service Unavailable' });
+  });
+
+  test('security rejection remains available when the audit logger fails', async (t) => {
+    const server = await new Promise((resolve) => {
+      const listening = createApp({
+        logger: {
+          error: () => undefined,
+          warn: () => { throw new Error('logger unavailable'); },
+        },
+        securityOptions: {
+          rateLimitStore: {
+            consume: () => { throw new Error('private state failure'); },
+          },
+        },
+      }).listen(0, () => resolve(listening));
+    });
+    t.after(() => closeServer(server));
+
+    const response = await request(server)({ path: '/status' });
+
+    assert.equal(response.status, 503);
+    assert.deepEqual(response.body, { error: 'Service Unavailable' });
+    assert.doesNotMatch(response.text, /logger|private state/u);
   });
 
   test('preserves GET, HEAD, status, authored-data, and JSON 404 behavior', async (t) => {

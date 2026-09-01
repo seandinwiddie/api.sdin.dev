@@ -57,10 +57,38 @@ copy and its action-oriented accessibility labels. The portfolio client owns
 the serializable visitor preference and gesture-gated audio effect; those
 runtime concerns must not be mirrored into authored API data.
 
+`presentation.runtime.telemetry.labels.feed` is exactly `GH + GOOGLE LIVE`, so
+the compact rail names both public signal authorities. The client may project
+the authored live suffix against dynamic sync, stale, or unavailable state, but
+must not replace the API-owned source label with local copy.
+
 Ambient motion tables define a continuously alive but quiet field: long,
 phase-separated cycles keep passive geometry from moving in lockstep, while
 small drift values preserve reading and hit geometry. Faster transit and beacon
 novelty remains sparse; semantic RTK activity pulses carry the sharper response.
+
+`presentation.runtime.resourceCatalog` is the framework-neutral method/path
+authority for every registered HTTP resource. Each entry has a stable resource
+and domain identity plus an explicit portfolio-consumer flag; it does not expose
+Redux endpoint names. The source-wide authority checker compares that catalog
+with the Express route stack so missing, duplicate, orphaned, and method-drifted
+resources fail verification.
+
+The same checker recursively scans every JavaScript or TypeScript module under
+`src`, requires source JSON to remain under `src/data`, rejects mirrored
+canonical prose and newly embedded presentation-copy bindings, and accumulates
+all violations in one run. Executable schemas, route identifiers, status enums,
+security policy, and upstream configuration remain code rather than being
+misclassified as authored portfolio content.
+
+`presentation.nexus.presences` is the single public-site catalog for Open Signal
+Channel links, bounded presence probes, and Observatory estate inventory. Every
+site declares presence, Analytics, and Search Console instrumentation capability.
+The estate projector carries real aggregate and presence evidence when it
+exists, reports `unavailable` or `unconfigured` when configured instrumentation
+has no evidence, and reports `not-instrumented` for capabilities with no
+property. It never manufactures zero metrics. Verification requires exact
+site-ID and destination parity between this catalog and projected estates.
 
 Reserved route names cannot be shadowed by authored keys. A collision must be
 reported and skipped at composition rather than changing the meaning of a
@@ -70,6 +98,21 @@ The portfolio client contains schemas and presentation configuration but no
 bundled authored-data fallback. Therefore changes to this JSON contract require
 coordinated service tests, portfolio type/selector tests, and a deployed
 consumer check.
+
+Current portfolio resource ownership is:
+
+| API resource domain | Method and path | Portfolio RTK Query owner |
+| :---- | :---- | :---- |
+| Registry | `GET /data` | `getInitialState` document cache |
+| GitHub | `GET /github` | `getGithubSummary` document cache |
+| Commit archive | `GET /github/commits` | `getGithubCommits` document cache |
+| Service | `GET /status` | `getApiStatus` document cache |
+| Observatory | `GET /observatory` | `getObservatory` document cache |
+| Presence | `GET /presence` | `getPresence` document cache |
+
+This table documents client ownership; the JSON catalog remains portable to any
+consumer framework. Cross-repository validation reads the portfolio API
+boundary without importing portfolio source into the service runtime.
 
 ## Ownership architecture
 
@@ -107,9 +150,12 @@ The physical modules apply those roles at compact scale:
 | `src/entities/presenceStore.js` | Bounded public-presence snapshot and single-flight refresh. |
 | `src/entities/rateLimitStore.js` | Factory-scoped RTK client-history authority with normalized entities, event reducers, bounded LRU order, and decision selectors. |
 | `src/security.js` | Security decisions and HTTP middleware-system composition. |
+| `src/systems/securityPerimeter.js` | Separate least-capability request perimeter for authority, target, Origin, representation, response capabilities, request identity, and rejection auditing. |
+| `src/systems/estateObservatory.js` | Pure site-catalog join across public presence and aggregate Observatory evidence. |
 | `src/systems/observatory.js` | Google effect orchestration and privacy-preserving aggregate projections. |
 | `src/systems/presence.js` | Authored-target probing, state classification, and summary projection. |
 | `src/data/initialState.json` | Inert authored component data. |
+| `scripts/check-data-authority.js` | Recursive authored-copy, JSON-location, Express/catalog, and optional portfolio-client contract audit. |
 
 Growth must split modules by component/entity/system ownership, not by generic
 “utils”, “helpers”, or “handlers” buckets. Effects must not migrate into
@@ -269,30 +315,64 @@ receives a fresh cooldown before another probe fan-out is eligible.
 
 ## Security boundary
 
-The application owns one early HTTP-security boundary before cache and route
-handlers. It must provide deliberate security headers and CORS policy, reject
-unsupported methods, bound request size, and rate-limit abusive clients while
-preserving ordinary read-only access and standards-compliant preflight/HEAD
-behavior. Express's `X-Powered-By` fingerprint remains disabled.
+The application owns two early, composable HTTP-security layers before cache and
+route handlers. `src/security.js` owns Helmet, CORS, request framing, methods,
+trusted client identity, and RTK rate state. The separate
+`src/systems/securityPerimeter.js` owns the request capability envelope:
+authority, target shape, Origin admission, JSON representation negotiation,
+browser-feature denial, server-generated request identity, and sanitized
+rejection auditing. Express's `X-Powered-By` fingerprint remains disabled.
 
-The boundary order is intentional: Helmet applies hardened headers; every path
-adds `Vary: Origin`; CORS is projected; non-preflight requests consume rate
-capacity; declared size/framing and then method decisions reject invalid
-requests; OPTIONS completes; and cache/business routes run last. Preflights
-never consume rate capacity. Method and size rejections count toward quota and
-carry the standard rate headers. Because framing precedes method selection, an
-oversized unsupported-method request is `413`, not `405`. Only GET, HEAD, and
-OPTIONS enter the service.
+This is an OpenBSD-inspired application security model, not a claim that a
+Node.js function on Vercel executes OpenBSD system calls. The design imports the
+relevant principles: secure defaults, a small declared capability set, no
+request-time widening, separate policy/state/effect ownership, and fail-closed
+behavior. OpenBSD's [`pledge(2)`](https://man.openbsd.org/pledge.2) makes
+undeclared subsystems unavailable and only permits later restriction;
+[`unveil(2)`](https://man.openbsd.org/unveil.2) exposes only a declared namespace
+and can then be locked; and OpenBSD documents continuous proactive auditing and
+disabled non-essential services in its
+[security goals](https://www.openbsd.org/security.html). The deploy platform
+continues to own the actual process, filesystem, network, and TLS sandbox.
+
+The boundary order is intentional: Helmet applies hardened headers; a trusted
+UUID request context and deny-all browser capability headers are established;
+every path adds `Vary: Origin`; CORS is projected without granting credentials;
+every request, including a malformed-Origin request or preflight, consumes rate
+capacity; malformed or disallowed Origins then fail; host, target, and
+representation promises are checked; declared size/framing and then method
+decisions reject invalid requests; OPTIONS completes; and business routes run
+last. Method, size, target, Origin, media, and preflight work therefore count
+toward quota and carry standard rate headers whenever rate state is available.
+Because framing precedes method selection, an oversized unsupported-method
+request is `413`, not `405`. Only GET, HEAD, and OPTIONS enter the service.
 
 CORS accepts requests without an Origin as native/server clients. Browser
 origins must be canonical HTTP(S) origins and follow the public-read or explicit
-allowlist policy. Credentials are never enabled. Denial is expressed by the
-absence of an allow-origin header, leaving standards-compliant browsers to
-enforce the boundary without turning CORS into application authentication.
+allowlist policy. Credentials are never enabled. A malformed Origin, or an
+origin outside a restricted policy, receives JSON `403`; this is an explicit
+server decision rather than reliance on a browser omitting access to a `200`.
+Public-read mode remains intentionally general because every published resource
+is public and non-credentialed.
 
+The request authority must name `api.sdin.dev`, a local development host, an
+explicit configured host, or a syntactically valid Vercel preview host when that
+capability is enabled; other authorities receive `421`. The request target must
+be origin-form with a canonical ASCII route path, validly encoded query,
+no dot/double-slash segments or decoded control characters/backslashes, and at
+most 2,048 bytes by default. `Accept` must permit JSON or a compatible wildcard;
+an incompatible value receives `406`. A supplied `Content-Type` must be
+`application/json` with at most UTF-8 charset metadata or receives `415`.
 Invalid declared sizes fail as bad requests. Oversized content and
 transfer-encoded bodies fail before route work. A method rejection advertises
 the supported method set. Every policy rejection is `no-store` JSON.
+
+Security environment values use defaults only when absent. An explicitly
+invalid boolean, positive integer, client-IP source, origin, or host is an
+applicative validation failure; all independent faults are accumulated and
+startup aborts without printing their values. Requests cannot weaken or extend
+the frozen policy. This keeps configuration mistakes from silently turning
+into a permissive runtime.
 
 Sliding-window rate histories are entity-owned, process-local, and bounded by
 client count. Each security composition creates one Redux Toolkit store for its
@@ -305,9 +385,9 @@ capacity and reset time, and assemble the complete middleware decision. The
 clock, Express objects, logging, promises, and every other capability remain
 outside Redux.
 
-Evaluated non-preflight requests publish draft-6 policy/limit/remaining/reset
-metadata; exhaustion returns retry metadata. A store failure fails closed as
-service unavailable. The store is intentionally non-durable: cold starts,
+Evaluated requests publish draft-6 policy/limit/remaining/reset metadata;
+exhaustion returns retry metadata. A missing or malformed RTK decision and every
+store failure fail closed as service unavailable. The store is intentionally non-durable: cold starts,
 instance recycling, and parallel instances begin independent histories. A
 multi-instance deployment must never market this boundary as a global quota.
 
@@ -322,9 +402,23 @@ client key.
 
 Security policy must be deterministic under an injected clock where time
 affects behavior. Rejections must use JSON and must not leak credentials,
-filesystem paths, stack traces, or internal dependency objects. Exact tunables,
-defaults, and operational commands belong in [SCRIPTS.md](./SCRIPTS.md); response
-semantics belong in the client README.
+filesystem paths, stack traces, raw error objects, request headers, or internal
+dependency objects. Security logs carry only a fixed event code and a
+server-generated request ID. `X-Request-ID` gives operators and clients a shared
+correlation value without trusting caller input. `Permissions-Policy` denies
+unused browser capabilities; frame denial, one-year preload HSTS, no-referrer,
+no-sniff, CSP, private revalidation, and explicit CDN `no-store` directives form
+defense in depth for JSON clients.
+
+The HTTP contracts follow the official OWASP
+[REST Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html)
+for method, length, media, error, header, CORS, and rate controls; the
+[API Security Top 10 misconfiguration guidance](https://owasp.org/API-Security/editions/2023/en/0xa8-security-misconfiguration/)
+for repeatable hardening across the proxy/application chain; and
+[ASVS](https://owasp.org/www-project-application-security-verification-standard/)
+as the verification framework. Exact tunables, defaults, and operational
+commands belong in [SCRIPTS.md](./SCRIPTS.md); response semantics belong in the
+client README.
 
 ## Secret and privacy boundary
 
@@ -351,6 +445,8 @@ server-side.
 The deterministic suite must cover:
 
 * startup/authored schema and every dynamic content route;
+* source-wide JSON authority, presentation-copy isolation, resource-catalog
+  schema, and Express method/path parity;
 * readiness, cache headers, unknown JSON routes, and error classification;
 * public contract keys and serializability;
 * repository normalization/filtering/deduplication/order;
@@ -359,11 +455,16 @@ The deterministic suite must cover:
   stale preservation;
 * authored-only presence probing, seven-target enforcement, classification,
   cache provenance, and redirect refusal;
+* public-site schema, Google instrumentation-policy ownership, exact
+  channel/estate destination parity, and non-fabricated capability states;
 * single-flight, live, cached, stale, partial, and unavailable states;
 * complete-stale preservation across a partial refresh;
 * timeout classification and contribution degradation;
 * aggregate resource isolation when commits or contributions fail; and
-* every security header, method, CORS, request-bound, and rate-limit invariant.
+* every security header, method, host, target, Origin, media, request-identity,
+  configuration, request-bound, and rate-limit invariant; and
+* the candidate-file secret scan, frozen security-policy checker, and current
+  production-dependency audit.
 
 Tests use an ephemeral real HTTP listener for boundary behavior and injected
 effects for upstream behavior. They must not require a fixed port, network
@@ -385,9 +486,10 @@ A candidate is production-verified only after the active deployed service shows:
    privacy exclusions and stale/unconfigured semantics;
 5. expected private-revalidation and security headers;
 6. JSON 404, unsupported-method, oversized-request, and rate-limit responses;
-7. allowed-origin and denied-origin CORS behavior;
-8. no leaked secret or stack/internal path; and
-9. successful portfolio consumption of the same deployment.
+7. allowed-origin CORS and explicit denied-origin behavior;
+8. authority, target, Accept, Content-Type, and request-ID perimeter behavior;
+9. no leaked secret, raw error, or stack/internal path; and
+10. successful portfolio consumption of the same deployment.
 
 Local suite success, source push, platform deployment, and production HTTP
 verification are separate milestones and must be reported separately.
