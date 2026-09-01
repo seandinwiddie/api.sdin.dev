@@ -157,7 +157,7 @@ describe('api.sdin.dev', () => {
 
   test('the portfolio contract fields are present and typed', async () => {
     const { body } = await get('/data');
-    assert.equal(typeof body.brandName, 'string');
+    assert.equal(body.brandName, 'Portfolio.sdin.dev');
     assert.equal(typeof body.description, 'string');
     assert.ok(Array.isArray(body.registryCapabilities));
     assert.ok(Array.isArray(body.operatingProtocols));

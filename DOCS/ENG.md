@@ -48,6 +48,10 @@ this service. Startup must parse it before accepting requests and fail closed if
 the file is missing or invalid. `/data`, dynamic key routes, and `/status`
 readiness all project this same in-memory document.
 
+`brandName` owns the portfolio shell's primary public header identity and is
+exactly `Portfolio.sdin.dev`. Lore-oriented registry names remain presentation
+metadata and must not replace that public product identity.
+
 Reserved route names cannot be shadowed by authored keys. A collision must be
 reported and skipped at composition rather than changing the meaning of a
 built-in route.

@@ -57,7 +57,7 @@
       "Then": "the application switches to the next validated profile and applies its CSS, Tamagui, visualization, and motion presentation coherently"
     }
   ],
-  "brandName": "Orbital Registry",
+  "brandName": "Portfolio.sdin.dev",
   "description": "Expo Go and RTK Developer",
   "presentation": {
     "metadata": {
