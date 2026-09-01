@@ -172,6 +172,14 @@ describe('api.sdin.dev', () => {
       assert.equal(typeof body.ambientScene.visuals[id].label, 'string');
       assert.equal(typeof body.ambientScene.motions[id].duration, 'number');
     }
+    assert.deepEqual(body.ambientScene.motions, {
+      'archive-orbit': { duration: 84, delay: -19, drift: 2 },
+      'registry-spine': { duration: 68, delay: -31, drift: 2 },
+      'pilgrim-transit': { duration: 36, delay: -11, drift: 12 },
+      'relay-beacon': { duration: 19, delay: -7, drift: 0 },
+      'terminus-horizon': { duration: 72, delay: -43, drift: 1 },
+      'survey-monolith': { duration: 64, delay: -23, drift: 2 },
+    });
     const activity = body.ambientScene.activity;
     const visualKindById = Object.freeze({
       'query-sync': 'sync',

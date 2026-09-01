@@ -57,6 +57,11 @@ copy and its action-oriented accessibility labels. The portfolio client owns
 the serializable visitor preference and gesture-gated audio effect; those
 runtime concerns must not be mirrored into authored API data.
 
+Ambient motion tables define a continuously alive but quiet field: long,
+phase-separated cycles keep passive geometry from moving in lockstep, while
+small drift values preserve reading and hit geometry. Faster transit and beacon
+novelty remains sparse; semantic RTK activity pulses carry the sharper response.
+
 Reserved route names cannot be shadowed by authored keys. A collision must be
 reported and skipped at composition rather than changing the meaning of a
 built-in route.
