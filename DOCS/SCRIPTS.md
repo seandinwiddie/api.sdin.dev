@@ -171,7 +171,7 @@ secret classification, runtime consumer, and test coverage here.
 | `src/components/securityPolicy.js` | Serializable/frozen security policy components and defaults. |
 | `src/entities/observatoryStore.js` | Strongest aggregate snapshot, single-flight refresh, explicit stale provenance, and retry cooldown. |
 | `src/entities/presenceStore.js` | Public-presence snapshot, single-flight refresh, stale provenance, and retry cooldown. |
-| `src/entities/rateLimitStore.js` | Bounded process-local request-history entity with Map-order O(1) LRU refresh/eviction; callers consume decisions rather than owning its map. |
+| `src/entities/rateLimitStore.js` | Factory-scoped RTK request-history entity with normalized clients, event-style observations, bounded LRU ordering, and admission/remaining/reset selectors; callers consume decisions rather than owning store state. |
 | `src/security.js` | Pure policy decisions and client-IP parsing plus Helmet → Vary → CORS → rate (OPTIONS exempt) → size/framing → method → OPTIONS middleware composition. |
 | `src/systems/observatory.js` | OAuth/Google effects, pure aggregate projection, reporting windows, privacy boundary, and availability composition. |
 | `src/systems/presence.js` | Authored-target probes, bounded parallel composition, and state projection. |

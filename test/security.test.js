@@ -3,7 +3,12 @@ const assert = require('node:assert');
 const http = require('node:http');
 
 const { createApp } = require('../src/api');
-const { createRateLimitStore } = require('../src/entities/rateLimitStore');
+const {
+  clientRequestObserved,
+  createRateLimitHistoryStore,
+  createRateLimitStore,
+  rateLimitSelectors,
+} = require('../src/entities/rateLimitStore');
 const vercelConfig = require('../vercel.json');
 const {
   originDecision,
@@ -136,14 +141,11 @@ describe('security policy core', () => {
 
   test('rate-limit state evicts the least-recent client while refreshing existing keys', () => {
     let clock = 0;
-    const transition = (observedAt) => (history) => ({
-      allowed: true,
-      history: [...history, observedAt],
-      observedAt,
-      remaining: 1,
-      resetAt: observedAt + 1000,
+    const store = createRateLimitStore(() => clock)({
+      limit: 10,
+      windowMs: 1000,
+      maxClients: 2,
     });
-    const store = createRateLimitStore(() => clock)(transition)(2);
 
     assert.deepEqual(store.consume('alpha').history, [0]);
     clock = 1;
@@ -154,6 +156,32 @@ describe('security policy core', () => {
     assert.deepEqual(store.consume('gamma').history, [3]);
     clock = 4;
     assert.deepEqual(store.consume('beta').history, [4]);
+  });
+
+  test('RTK selectors project admission, remaining capacity, and reset from serializable history', () => {
+    const historyStore = createRateLimitHistoryStore({
+      limit: 2,
+      windowMs: 1000,
+      maxClients: 2,
+    });
+    const observe = (observedAt) =>
+      historyStore.dispatch(clientRequestObserved({ clientKey: 'alpha', observedAt }));
+
+    observe(0);
+    assert.equal(rateLimitSelectors.selectAdmission(historyStore.getState(), 'alpha'), true);
+    assert.equal(rateLimitSelectors.selectRemaining(historyStore.getState(), 'alpha'), 1);
+    assert.equal(rateLimitSelectors.selectResetAt(historyStore.getState(), 'alpha'), 1000);
+
+    observe(1);
+    observe(2);
+    const state = historyStore.getState();
+
+    assert.equal(rateLimitSelectors.selectAdmission(state, 'alpha'), false);
+    assert.equal(rateLimitSelectors.selectRemaining(state, 'alpha'), 0);
+    assert.equal(rateLimitSelectors.selectResetAt(state, 'alpha'), 1000);
+    assert.deepEqual(rateLimitSelectors.selectClientHistory(state, 'alpha'), [0, 1]);
+    assert.deepEqual(JSON.parse(JSON.stringify(state)), state);
+    assert.equal(clientRequestObserved.type, 'rateLimit/clientRequestObserved');
   });
 });
 

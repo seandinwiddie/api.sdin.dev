@@ -91,7 +91,7 @@ The physical modules apply those roles at compact scale:
 | `src/components/securityPolicy.js` | Inert frozen security methods, origins, headers, defaults, and Helmet policy. |
 | `src/entities/observatoryStore.js` | Loss-averse observatory snapshot, single-flight refresh, and stale provenance. |
 | `src/entities/presenceStore.js` | Bounded public-presence snapshot and single-flight refresh. |
-| `src/entities/rateLimitStore.js` | Bounded process-local client-history entity with Map-order O(1) LRU refresh/eviction. |
+| `src/entities/rateLimitStore.js` | Factory-scoped RTK client-history authority with normalized entities, event reducers, bounded LRU order, and decision selectors. |
 | `src/security.js` | Security decisions and HTTP middleware-system composition. |
 | `src/systems/observatory.js` | Google effect orchestration and privacy-preserving aggregate projections. |
 | `src/systems/presence.js` | Authored-target probing, state classification, and summary projection. |
@@ -281,12 +281,21 @@ transfer-encoded bodies fail before route work. A method rejection advertises
 the supported method set. Every policy rejection is `no-store` JSON.
 
 Sliding-window rate histories are entity-owned, process-local, and bounded by
-client count.
-Map insertion order provides O(1) least-recently-used refresh and eviction before
-inserting beyond that bound. Evaluated non-preflight requests publish draft-6
-policy/limit/remaining/reset metadata; exhaustion returns retry metadata. A store
-failure fails closed as service unavailable. Because this is deliberately
-process-local, a multi-instance deployment must not market it as a global quota.
+client count. Each security composition creates one Redux Toolkit store for its
+warm-instance lifetime. A normalized entity adapter owns client histories while
+an ordered identifier collection provides least-recently-used refresh and
+eviction before inserting beyond the bound. Event-style reducers receive only a
+client key and observed timestamp; policy, histories, and the last admission are
+plain serializable values. Selectors project the last admission, derive remaining
+capacity and reset time, and assemble the complete middleware decision. The
+clock, Express objects, logging, promises, and every other capability remain
+outside Redux.
+
+Evaluated non-preflight requests publish draft-6 policy/limit/remaining/reset
+metadata; exhaustion returns retry metadata. A store failure fails closed as
+service unavailable. The store is intentionally non-durable: cold starts,
+instance recycling, and parallel instances begin independent histories. A
+multi-instance deployment must never market this boundary as a global quota.
 
 The default client key is the socket address and Express proxy trust remains
 disabled. Only an explicit Vercel mode may read `x-vercel-forwarded-for`; it

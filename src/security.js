@@ -156,21 +156,6 @@ const requestSizeDecision = (maxBytes) => ({ contentLength, transferEncoding }) 
   return decisions.find((decision) => decision.when()).value;
 };
 
-const rateLimitTransition = (policy) => (now) => (history) => {
-  const activeHistory = history.filter((timestamp) => now - timestamp < policy.windowMs);
-  const allowed = activeHistory.length < policy.limit;
-  const nextHistory = allowed ? [...activeHistory, now] : activeHistory;
-  const resetAt = (nextHistory[0] ?? now) + policy.windowMs;
-
-  return {
-    allowed,
-    history: nextHistory,
-    observedAt: now,
-    remaining: Math.max(0, policy.limit - nextHistory.length),
-    resetAt,
-  };
-};
-
 const rateLimitHeaders = (policy) => (now) => (decision) => {
   const windowSeconds = Math.ceil(policy.windowMs / 1000);
   const resetSeconds = Math.max(0, Math.ceil((decision.resetAt - now) / 1000));
@@ -266,8 +251,7 @@ const createRateLimitMiddleware = ({ store, clientKey, policy }) => {
 const createSecurityMiddleware = (options = {}) => {
   const policy = securityPolicyFrom(options);
   const now = options.now ?? Date.now;
-  const transition = rateLimitTransition(policy.rateLimit);
-  const store = options.rateLimitStore ?? createRateLimitStore(now)(transition)(policy.rateLimit.maxClients);
+  const store = options.rateLimitStore ?? createRateLimitStore(now)(policy.rateLimit);
   const clientKey = options.clientKey ?? clientKeyFrom(policy.clientIpSource);
 
   return [
@@ -288,7 +272,6 @@ module.exports = {
   originDecision,
   parseOrigin,
   rateLimitHeaders,
-  rateLimitTransition,
   requestSizeDecision,
   securityPolicyFrom,
   singleIp,
