@@ -172,46 +172,74 @@ describe('api.sdin.dev', () => {
       assert.equal(typeof body.ambientScene.visuals[id].label, 'string');
       assert.equal(typeof body.ambientScene.motions[id].duration, 'number');
     }
-    assert.deepEqual(body.ambientScene.activity.ids, [
+    const activity = body.ambientScene.activity;
+    const visualKindById = Object.freeze({
+      'query-sync': 'sync',
+      'query-resolve': 'resolve',
+      'route-transit': 'transit',
+      'query-fault': 'fault',
+    });
+    const allowedVisualKinds = Object.freeze(['sync', 'resolve', 'transit', 'fault']);
+    const visualNumericBounds = Object.freeze({
+      durationMs: [100, 10_000],
+      intensity: [0.01, 1],
+      x: [0, 100],
+      y: [0, 100],
+      rotation: [-360, 360],
+      travelVw: [0, 100],
+      spreadVw: [1, 100],
+    });
+    const acousticNumericBounds = Object.freeze({
+      frequency: [20, 20_000],
+      destinationFrequency: [20, 20_000],
+      filterFrequency: [20, 20_000],
+      durationSeconds: [0.01, 5],
+      attackSeconds: [0.001, 1],
+      delayMs: [0, 5_000],
+      gain: [0.0001, 0.05],
+      filterQ: [0.1, 100],
+    });
+    const assertFiniteWithin = (value, [minimum, maximum], path) => {
+      assert.ok(Number.isFinite(value), `${path} must be finite`);
+      assert.ok(
+        value >= minimum && value <= maximum,
+        `${path} must be between ${minimum} and ${maximum}`
+      );
+    };
+
+    assert.deepEqual(activity.ids, [
       'query-sync',
       'query-resolve',
       'route-transit',
       'query-fault',
     ]);
-    assert.equal(new Set(body.ambientScene.activity.ids).size, body.ambientScene.activity.ids.length);
+    assert.equal(new Set(activity.ids).size, activity.ids.length);
+    const activityKeys = [...activity.ids].sort();
+    assert.deepEqual(Object.keys(visualKindById).sort(), activityKeys);
     assert.deepEqual(
-      Object.keys(body.ambientScene.activity.visuals).sort(),
-      [...body.ambientScene.activity.ids].sort()
+      Object.keys(activity.visuals).sort(),
+      activityKeys
     );
     assert.deepEqual(
-      Object.keys(body.ambientScene.activity.acoustics).sort(),
-      [...body.ambientScene.activity.ids].sort()
+      Object.keys(activity.acoustics).sort(),
+      activityKeys
     );
-    for (const id of body.ambientScene.activity.ids) {
-      const visual = body.ambientScene.activity.visuals[id];
-      const acoustic = body.ambientScene.activity.acoustics[id];
-      assert.equal(typeof visual.durationMs, 'number');
-      assert.equal(typeof visual.intensity, 'number');
-      assert.equal(typeof visual.travelVw, 'number');
-      assert.ok(visual.durationMs > 0);
-      assert.ok(visual.intensity > 0 && visual.intensity <= 1);
-      assert.ok(visual.x >= 0 && visual.x <= 100);
-      assert.ok(visual.y >= 0 && visual.y <= 100);
-      assert.ok(visual.travelVw >= 0);
-      assert.ok(visual.spreadVw > 0);
-      assert.equal(typeof acoustic.frequency, 'number');
-      assert.equal(typeof acoustic.delayMs, 'number');
-      assert.equal(typeof acoustic.gain, 'number');
-      assert.ok(acoustic.frequency > 0);
-      assert.ok(acoustic.destinationFrequency > 0);
-      assert.ok(acoustic.filterFrequency > 0);
-      assert.ok(acoustic.durationSeconds > 0);
-      assert.ok(acoustic.attackSeconds > 0);
-      assert.ok(acoustic.attackSeconds < acoustic.durationSeconds);
-      assert.ok(acoustic.delayMs >= 0);
-      assert.ok(acoustic.gain > 0 && acoustic.gain <= 0.05);
-      assert.ok(acoustic.filterQ > 0);
-      assert.match(acoustic.waveform, /^(?:sine|square|sawtooth|triangle)$/);
+    for (const id of activity.ids) {
+      const visual = activity.visuals[id];
+      const acoustic = activity.acoustics[id];
+      assert.ok(allowedVisualKinds.includes(visual.kind));
+      assert.equal(visual.kind, visualKindById[id]);
+      for (const [field, bounds] of Object.entries(visualNumericBounds)) {
+        assertFiniteWithin(visual[field], bounds, `activity.visuals.${id}.${field}`);
+      }
+      for (const [field, bounds] of Object.entries(acousticNumericBounds)) {
+        assertFiniteWithin(acoustic[field], bounds, `activity.acoustics.${id}.${field}`);
+      }
+      assert.ok(
+        acoustic.attackSeconds < acoustic.durationSeconds,
+        `activity.acoustics.${id}.attackSeconds must be shorter than durationSeconds`
+      );
+      assert.ok(['sine', 'square', 'sawtooth', 'triangle'].includes(acoustic.waveform));
     }
     assert.equal(typeof body.presentation.ingress.name, 'string');
     assert.equal(typeof body.presentation.ingress.statement, 'string');
