@@ -172,6 +172,47 @@ describe('api.sdin.dev', () => {
       assert.equal(typeof body.ambientScene.visuals[id].label, 'string');
       assert.equal(typeof body.ambientScene.motions[id].duration, 'number');
     }
+    assert.deepEqual(body.ambientScene.activity.ids, [
+      'query-sync',
+      'query-resolve',
+      'route-transit',
+      'query-fault',
+    ]);
+    assert.equal(new Set(body.ambientScene.activity.ids).size, body.ambientScene.activity.ids.length);
+    assert.deepEqual(
+      Object.keys(body.ambientScene.activity.visuals).sort(),
+      [...body.ambientScene.activity.ids].sort()
+    );
+    assert.deepEqual(
+      Object.keys(body.ambientScene.activity.acoustics).sort(),
+      [...body.ambientScene.activity.ids].sort()
+    );
+    for (const id of body.ambientScene.activity.ids) {
+      const visual = body.ambientScene.activity.visuals[id];
+      const acoustic = body.ambientScene.activity.acoustics[id];
+      assert.equal(typeof visual.durationMs, 'number');
+      assert.equal(typeof visual.intensity, 'number');
+      assert.equal(typeof visual.travelVw, 'number');
+      assert.ok(visual.durationMs > 0);
+      assert.ok(visual.intensity > 0 && visual.intensity <= 1);
+      assert.ok(visual.x >= 0 && visual.x <= 100);
+      assert.ok(visual.y >= 0 && visual.y <= 100);
+      assert.ok(visual.travelVw >= 0);
+      assert.ok(visual.spreadVw > 0);
+      assert.equal(typeof acoustic.frequency, 'number');
+      assert.equal(typeof acoustic.delayMs, 'number');
+      assert.equal(typeof acoustic.gain, 'number');
+      assert.ok(acoustic.frequency > 0);
+      assert.ok(acoustic.destinationFrequency > 0);
+      assert.ok(acoustic.filterFrequency > 0);
+      assert.ok(acoustic.durationSeconds > 0);
+      assert.ok(acoustic.attackSeconds > 0);
+      assert.ok(acoustic.attackSeconds < acoustic.durationSeconds);
+      assert.ok(acoustic.delayMs >= 0);
+      assert.ok(acoustic.gain > 0 && acoustic.gain <= 0.05);
+      assert.ok(acoustic.filterQ > 0);
+      assert.match(acoustic.waveform, /^(?:sine|square|sawtooth|triangle)$/);
+    }
     assert.equal(typeof body.presentation.ingress.name, 'string');
     assert.equal(typeof body.presentation.ingress.statement, 'string');
     assert.equal(typeof body.presentation.ingress.install.webUrl, 'string');

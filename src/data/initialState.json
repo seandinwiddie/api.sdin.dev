@@ -480,7 +480,7 @@
           "units": "units",
           "loaded": "loaded",
           "actions": "actions",
-          "store": "4 slices · rtk query",
+          "store": "5 slices · rtk query",
           "noneYet": "none yet",
           "respected": "respected",
           "notRequested": "not requested",
@@ -688,6 +688,97 @@
         "duration": 28,
         "delay": 5,
         "drift": 5
+      }
+    },
+    "activity": {
+      "ids": ["query-sync", "query-resolve", "route-transit", "query-fault"],
+      "visuals": {
+        "query-sync": {
+          "kind": "sync",
+          "durationMs": 1400,
+          "intensity": 0.22,
+          "x": 18,
+          "y": 24,
+          "rotation": -8,
+          "travelVw": 28,
+          "spreadVw": 16
+        },
+        "query-resolve": {
+          "kind": "resolve",
+          "durationMs": 1150,
+          "intensity": 0.34,
+          "x": 76,
+          "y": 28,
+          "rotation": 0,
+          "travelVw": 18,
+          "spreadVw": 24
+        },
+        "route-transit": {
+          "kind": "transit",
+          "durationMs": 780,
+          "intensity": 0.28,
+          "x": 24,
+          "y": 68,
+          "rotation": -12,
+          "travelVw": 34,
+          "spreadVw": 12
+        },
+        "query-fault": {
+          "kind": "fault",
+          "durationMs": 1800,
+          "intensity": 0.32,
+          "x": 82,
+          "y": 52,
+          "rotation": 4,
+          "travelVw": 10,
+          "spreadVw": 20
+        }
+      },
+      "acoustics": {
+        "query-sync": {
+          "frequency": 96,
+          "destinationFrequency": 112,
+          "filterFrequency": 680,
+          "durationSeconds": 0.09,
+          "attackSeconds": 0.012,
+          "delayMs": 70,
+          "gain": 0.006,
+          "filterQ": 3.2,
+          "waveform": "sine"
+        },
+        "query-resolve": {
+          "frequency": 146,
+          "destinationFrequency": 220,
+          "filterFrequency": 1160,
+          "durationSeconds": 0.18,
+          "attackSeconds": 0.018,
+          "delayMs": 48,
+          "gain": 0.011,
+          "filterQ": 4.4,
+          "waveform": "triangle"
+        },
+        "route-transit": {
+          "frequency": 196,
+          "destinationFrequency": 293,
+          "filterFrequency": 1580,
+          "durationSeconds": 0.14,
+          "attackSeconds": 0.01,
+          "delayMs": 24,
+          "gain": 0.009,
+          "filterQ": 3.8,
+          "waveform": "sine"
+        },
+        "query-fault": {
+          "frequency": 82,
+          "destinationFrequency": 61,
+          "filterFrequency": 540,
+          "durationSeconds": 0.22,
+          "attackSeconds": 0.02,
+          "delayMs": 72,
+          "gain": 0.009,
+          "filterQ": 5.2,
+          "waveform": "sawtooth"
+        }
       }
     }
   },
