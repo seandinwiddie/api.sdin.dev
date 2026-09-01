@@ -9,18 +9,31 @@ const {
   pipe,
 } = require('functional-programming-composition');
 const { OBSERVATORY_CHANNELS } = require('../src/components/observatoryPolicy');
+const {
+  AUTHORIZED_ASSESSMENT_POLICY,
+  AUTHORIZED_DAST_TARGETS,
+  PASSIVE_SECURITY_POSTURE_POLICY,
+  SECURITY_POSTURE_POLICY,
+  securityPosturePolicyIssues,
+} = require('../src/components/securityPosturePolicy');
+const { manifestDefinitionIssues } = require('../src/systems/agentManifest');
 const { projectEstateObservatory } = require('../src/systems/estateObservatory');
+const {
+  securityAssessmentIssues,
+  securityPostureDefinitionIssues,
+} = require('../src/systems/securityPosture');
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const COPY_BINDING = /(?:caption|copy|description|eyebrow|headline|heading|label|prompt|statement|subtitle|text|title)$/i;
 const AUTHORED_KEY = /^(?:brandName|caption|copy|description|detail|eyebrow|headline|heading|label|message|name|prompt|statement|subtitle|summary|text|title|.*Label|.*Text)$/i;
 const MACHINE_PATH_SEGMENTS = new Set(['activityKinds', 'resourceCatalog']);
 const MACHINE_LITERAL = /^(?:[a-z][a-zA-Z0-9]*(?:[._:/-][a-zA-Z0-9]+)+|[A-Z0-9_-]+)$/;
-const ROUTE_PATH = /^\/(?:[A-Za-z][A-Za-z0-9]*(?:\/[A-Za-z][A-Za-z0-9]*)*)?$/;
+const ROUTE_PATH = /^\/(?:[A-Za-z][A-Za-z0-9-]*(?:\/[A-Za-z][A-Za-z0-9-]*)*)?$/;
 const RESOURCE_TOKEN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const RESOURCE_FIELDS = ['domain', 'id', 'method', 'path', 'portfolio'];
-const SITE_FIELDS = ['capabilities', 'id', 'label', 'url'];
+const SITE_FIELDS = ['capabilities', 'id', 'label', 'repositories', 'url'];
 const SITE_CAPABILITY_FIELDS = ['analytics', 'presence', 'searchConsole'];
+const SITE_REPOSITORY_FIELDS = ['id', 'sourceUrl', 'status'];
 const JAVASCRIPT_TOKEN = /(?<string>"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`)|(?<lineComment>\/\/[^\r\n]*)|(?<blockComment>\/\*[\s\S]*?\*\/)/g;
 const AUTHORITY_OBJECT = /\b(?:const|let|var)\s+(?:authoredData|fallbackData|fallbackPresentation|presentationData|runtimePresentation)\s*=\s*(?:\{|\[)/g;
 
@@ -29,6 +42,8 @@ const report = issue('DATA-AUTHORITY');
 const routeReport = issue('ROUTE-CATALOG');
 const portfolioReport = issue('PORTFOLIO-CONTRACT');
 const estateReport = issue('ESTATE-CATALOG');
+const manifestReport = issue('AGENT-MANIFEST');
+const postureReport = issue('SECURITY-POSTURE');
 
 const when = (predicate) => (value) => predicate ? [value] : [];
 
@@ -252,6 +267,9 @@ const siteSchemaIssues = (site, index) => {
   const capabilities = validResourceObject(object.capabilities)
     ? object.capabilities
     : {};
+  const repositories = Array.isArray(object.repositories)
+    ? object.repositories
+    : [];
   return [
     ...when(!validResourceObject(site))(
       estateReport(location)('site must be a JSON object')
@@ -291,6 +309,55 @@ const siteSchemaIssues = (site, index) => {
         'every public signal destination must be presence-monitored'
       )
     ),
+    ...when(!Array.isArray(object.repositories))(
+      estateReport(`${location}.repositories`)('repositories must be an array')
+    ),
+    ...duplicateValues(repositories.map((repository) => repository?.id)).map((id) =>
+      estateReport(`${location}.repositories`)(`duplicate repository id ${id}`)
+    ),
+    ...repositories.flatMap((repository, repositoryIndex) => {
+      const repositoryLocation = `${location}.repositories.${repositoryIndex}`;
+      const source = typeof repository?.sourceUrl === 'string' &&
+        URL.canParse(repository.sourceUrl)
+        ? new URL(repository.sourceUrl)
+        : null;
+      return [
+        ...when(!validResourceObject(repository))(
+          estateReport(repositoryLocation)('repository must be a JSON object')
+        ),
+        ...when(
+          Object.keys(validResourceObject(repository) ? repository : {})
+            .sort()
+            .join(',') !== SITE_REPOSITORY_FIELDS.join(',')
+        )(
+          estateReport(repositoryLocation)(
+            `repository fields must be exactly ${SITE_REPOSITORY_FIELDS.join(', ')}`
+          )
+        ),
+        ...when(!RESOURCE_TOKEN.test(repository?.id ?? ''))(
+          estateReport(`${repositoryLocation}.id`)(
+            'id must be a kebab-case repository token'
+          )
+        ),
+        ...when(!(
+          source &&
+          source.protocol === 'https:' &&
+          source.hostname === 'github.com' &&
+          /^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(source.pathname) &&
+          source.search === '' &&
+          source.hash === ''
+        ))(
+          estateReport(`${repositoryLocation}.sourceUrl`)(
+            'sourceUrl must be a canonical public GitHub repository URL'
+          )
+        ),
+        ...when(repository?.status !== 'public-source')(
+          estateReport(`${repositoryLocation}.status`)(
+            'status must be public-source'
+          )
+        ),
+      ];
+    }),
   ];
 };
 
@@ -335,11 +402,21 @@ const estateParityIssues = (sites, estates) => {
     ...(estates ?? [])
       .filter(({ id }) => siteIds.has(id))
       .flatMap((estate) =>
-        when(sitesById[estate.id].url !== estate.url)(
-          estateReport(`observatory.estates.${estate.id}`)(
-            `destination mismatch: catalog ${sitesById[estate.id].url} versus estate ${estate.url}`
-          )
-        )
+        [
+          ...when(sitesById[estate.id].url !== estate.url)(
+            estateReport(`observatory.estates.${estate.id}`)(
+              `destination mismatch: catalog ${sitesById[estate.id].url} versus estate ${estate.url}`
+            )
+          ),
+          ...when(
+            JSON.stringify(sitesById[estate.id].repositories) !==
+              JSON.stringify(estate.repositories)
+          )(
+            estateReport(`observatory.estates.${estate.id}.repositories`)(
+              'repository attribution differs from the authored site catalog'
+            )
+          ),
+        ]
       ),
   ];
 };
@@ -480,9 +557,19 @@ const repositoryAudit = (repoRoot) => {
   const srcRoot = path.join(repoRoot, 'src');
   const dataRoot = path.join(srcRoot, 'data');
   const canonicalPath = path.join(dataRoot, 'initialState.json');
+  const securityAssessmentsPath = path.join(dataRoot, 'securityAssessments.json');
+  const securityPosturePolicyPath = path.join(dataRoot, 'securityPosturePolicy.json');
   const canonicalExists = fs.existsSync(canonicalPath);
+  const securityAssessmentsExist = fs.existsSync(securityAssessmentsPath);
+  const securityPosturePolicyExists = fs.existsSync(securityPosturePolicyPath);
   const canonical = canonicalExists
     ? JSON.parse(fs.readFileSync(canonicalPath, 'utf8'))
+    : {};
+  const securityAssessments = securityAssessmentsExist
+    ? JSON.parse(fs.readFileSync(securityAssessmentsPath, 'utf8'))
+    : {};
+  const securityPosturePolicy = securityPosturePolicyExists
+    ? JSON.parse(fs.readFileSync(securityPosturePolicyPath, 'utf8'))
     : {};
   const documents = readSourceDocuments(srcRoot);
   const catalog = resourceCatalogOf(canonical);
@@ -500,6 +587,16 @@ const repositoryAudit = (repoRoot) => {
       ...when(!canonicalExists)(
         report(relativeUnix(repoRoot)(canonicalPath))('canonical authored JSON is missing')
       ),
+      ...when(!securityAssessmentsExist)(
+        postureReport(relativeUnix(repoRoot)(securityAssessmentsPath))(
+          'sanitized security assessment JSON is missing'
+        )
+      ),
+      ...when(!securityPosturePolicyExists)(
+        postureReport(relativeUnix(repoRoot)(securityPosturePolicyPath))(
+          'security posture policy JSON is missing'
+        )
+      ),
       ...when(canonical === null || Array.isArray(canonical) || typeof canonical !== 'object')(
         report(relativeUnix(repoRoot)(canonicalPath))('canonical authored JSON must be an object')
       ),
@@ -508,6 +605,46 @@ const repositoryAudit = (repoRoot) => {
       ...embeddedCopyIssues(documents),
       ...catalogSchemaIssues(catalog),
       ...siteCatalogIssues(sites),
+      ...manifestDefinitionIssues({
+        definition: canonical?.presentation?.runtime?.agentManifest,
+        resourceCatalog: catalog,
+      }).map((detail) =>
+        manifestReport('presentation.runtime.agentManifest')(detail)
+      ),
+      ...securityPostureDefinitionIssues({
+        sites,
+        definition: canonical?.presentation?.runtime?.securityPosture,
+      }).map((detail) =>
+        postureReport('presentation.runtime.securityPosture')(detail)
+      ),
+      ...securityAssessmentIssues(securityAssessments).map((detail) =>
+        postureReport('src/data/securityAssessments.json')(detail)
+      ),
+      ...securityPosturePolicyIssues(securityPosturePolicy).map((detail) =>
+        postureReport('src/data/securityPosturePolicy.json')(detail)
+      ),
+      ...when(JSON.stringify(SECURITY_POSTURE_POLICY) !==
+        JSON.stringify(securityPosturePolicy))(
+        postureReport('src/components/securityPosturePolicy.js')(
+          'runtime posture policy must equal the JSON authority'
+        )
+      ),
+      ...when(PASSIVE_SECURITY_POSTURE_POLICY !== SECURITY_POSTURE_POLICY.passive)(
+        postureReport('src/components/securityPosturePolicy.js')(
+          'passive policy must be a direct JSON projection'
+        )
+      ),
+      ...when(AUTHORIZED_ASSESSMENT_POLICY !== SECURITY_POSTURE_POLICY.assessment)(
+        postureReport('src/components/securityPosturePolicy.js')(
+          'assessment policy must be a direct JSON projection'
+        )
+      ),
+      ...when(AUTHORIZED_DAST_TARGETS !==
+        SECURITY_POSTURE_POLICY.assessment.authorizedTargets)(
+        postureReport('src/components/securityPosturePolicy.js')(
+          'authorized targets must be a direct JSON projection'
+        )
+      ),
       ...instrumentationParityIssues(sites),
       ...estateParityIssues(sites, projectedEstates),
       ...compareRouteSets('API Express implementation')(
@@ -557,10 +694,14 @@ module.exports = {
   embeddedCopyIssues,
   estateParityIssues,
   implementedRoutesOf,
+  manifestDefinitionIssues,
   mirroredLiteralIssues,
   parsePortfolioEndpoints,
   portfolioContractIssues,
   repositoryAudit,
   resourceCatalogOf,
+  securityAssessmentIssues,
+  securityPostureDefinitionIssues,
+  securityPosturePolicyIssues,
   siteCatalogIssues,
 };

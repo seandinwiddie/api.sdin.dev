@@ -136,7 +136,8 @@
             "presence": true,
             "analytics": false,
             "searchConsole": false
-          }
+          },
+          "repositories": []
         },
         {
           "id": "lectures",
@@ -146,7 +147,14 @@
             "presence": true,
             "analytics": false,
             "searchConsole": false
-          }
+          },
+          "repositories": [
+            {
+              "id": "seandinwiddie-lectures",
+              "sourceUrl": "https://github.com/seandinwiddie/lectures",
+              "status": "public-source"
+            }
+          ]
         },
         {
           "id": "functional-programming-library",
@@ -156,7 +164,14 @@
             "presence": true,
             "analytics": false,
             "searchConsole": false
-          }
+          },
+          "repositories": [
+            {
+              "id": "functional-programming-composition-fp",
+              "sourceUrl": "https://github.com/functional-programming-composition/fp",
+              "status": "public-source"
+            }
+          ]
         },
         {
           "id": "personal",
@@ -166,7 +181,8 @@
             "presence": true,
             "analytics": true,
             "searchConsole": true
-          }
+          },
+          "repositories": []
         },
         {
           "id": "registry",
@@ -176,7 +192,14 @@
             "presence": true,
             "analytics": true,
             "searchConsole": true
-          }
+          },
+          "repositories": [
+            {
+              "id": "seandinwiddie-portfolio",
+              "sourceUrl": "https://github.com/seandinwiddie/portfolio",
+              "status": "public-source"
+            }
+          ]
         },
         {
           "id": "github-pages",
@@ -186,7 +209,8 @@
             "presence": true,
             "analytics": false,
             "searchConsole": false
-          }
+          },
+          "repositories": []
         }
       ]
     },
@@ -315,6 +339,20 @@
             "method": "GET",
             "path": "/data",
             "domain": "registry",
+            "portfolio": true
+          },
+          {
+            "id": "agent-manifest",
+            "method": "GET",
+            "path": "/agent-manifest",
+            "domain": "machine-discovery",
+            "portfolio": false
+          },
+          {
+            "id": "security-posture-summary",
+            "method": "GET",
+            "path": "/security-posture",
+            "domain": "security-posture",
             "portfolio": true
           },
           {
@@ -449,6 +487,129 @@
             "path": "/dossier",
             "domain": "authored-slice",
             "portfolio": false
+          }
+        ]
+      },
+      "agentManifest": {
+        "schemaVersion": "1.0.0",
+        "kind": "public-api-manifest",
+        "service": "api.sdin.dev",
+        "description": "Stable, read-only JSON resources for the portfolio registry and its public engineering observatory.",
+        "canonicalBaseUrl": "https://api.sdin.dev",
+        "links": [
+          {
+            "rel": "self",
+            "href": "https://api.sdin.dev/agent-manifest",
+            "type": "application/json"
+          },
+          {
+            "rel": "authoritative-data",
+            "href": "https://api.sdin.dev/data",
+            "type": "application/json"
+          },
+          {
+            "rel": "security-posture",
+            "href": "https://api.sdin.dev/security-posture",
+            "type": "application/json"
+          },
+          {
+            "rel": "portfolio",
+            "href": "https://portfolio.sdin.dev",
+            "type": "text/html"
+          },
+          {
+            "rel": "documentation",
+            "href": "https://github.com/seandinwiddie/api.sdin.dev/blob/main/README.md",
+            "type": "text/markdown"
+          },
+          {
+            "rel": "source",
+            "href": "https://github.com/seandinwiddie/api.sdin.dev",
+            "type": "text/html"
+          }
+        ],
+        "usage": {
+          "readOnly": true,
+          "authentication": "none",
+          "responseMediaType": "application/json",
+          "rateLimitHeaders": [
+            "RateLimit-Policy",
+            "RateLimit-Limit",
+            "RateLimit-Remaining",
+            "RateLimit-Reset",
+            "Retry-After"
+          ]
+        }
+      },
+      "securityPosture": {
+        "schemaVersion": "1.0.0",
+        "kind": "digital-estate-security-posture",
+        "description": "Bounded public observations of the authored digital estate plus sanitized status from separately authorized security assessments. This is evidence, not a security certification.",
+        "rubric": [
+          {
+            "id": "encrypted-transport",
+            "label": "Encrypted transport",
+            "description": "The platform fetch completed over the authored HTTPS destination without exposing certificate details.",
+            "weight": 2
+          },
+          {
+            "id": "strict-transport-security",
+            "label": "Strict transport security",
+            "description": "The response advertises a positive Strict-Transport-Security max-age.",
+            "weight": 2
+          },
+          {
+            "id": "content-security-policy",
+            "label": "Content security policy",
+            "description": "The response advertises a non-empty Content-Security-Policy.",
+            "weight": 2
+          },
+          {
+            "id": "frame-protection",
+            "label": "Frame protection",
+            "description": "The response advertises frame-ancestors or a deny/same-origin frame policy.",
+            "weight": 1
+          },
+          {
+            "id": "content-type-options",
+            "label": "Content type protection",
+            "description": "The response advertises X-Content-Type-Options as nosniff.",
+            "weight": 1
+          },
+          {
+            "id": "referrer-policy",
+            "label": "Referrer policy",
+            "description": "The response advertises a recognized privacy-preserving referrer policy.",
+            "weight": 1
+          },
+          {
+            "id": "permissions-policy",
+            "label": "Permissions policy",
+            "description": "The response advertises explicit browser capability policy.",
+            "weight": 1
+          },
+          {
+            "id": "cross-origin-isolation",
+            "label": "Cross-origin isolation",
+            "description": "The response combines same-origin opener policy with a compatible embedder policy.",
+            "weight": 1
+          }
+        ],
+        "links": [
+          {
+            "rel": "self",
+            "href": "https://api.sdin.dev/security-posture",
+            "type": "application/json"
+          },
+          {
+            "rel": "authoritative-data",
+            "href": "https://api.sdin.dev/data",
+            "type": "application/json"
+          },
+          {
+            "rel": "agent-manifest",
+            "href": "https://api.sdin.dev/agent-manifest",
+            "type": "application/json"
           }
         ]
       },

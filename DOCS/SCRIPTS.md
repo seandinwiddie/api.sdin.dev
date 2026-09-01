@@ -123,6 +123,36 @@ ordinary route emits `s-maxage`. `/status` and every error or policy rejection
 use `no-store`. `CDN-Cache-Control` and `Vercel-CDN-Cache-Control` also deny
 shared storage at the platform boundary.
 
+### Security observatory and assessment policy
+
+`src/data/securityPosturePolicy.json` owns the passive and assessment
+capabilities that no public request or assessment record can widen.
+`src/components/securityPosturePolicy.js` validates the complete schema and
+least-capability invariants, then recursively freezes the document before any
+system or checker can consume it:
+
+* passive observations accept at most twelve authored public HTTPS sites, use
+  one bodyless `HEAD` each, and never follow redirects;
+* the authorized active target allowlist is exactly
+  `https://portfolio.sdin.dev` and `https://api.sdin.dev`;
+* active assessment is owner-CI/CLI-only, one target at a time, at most one run
+  per target per day, at most two requests per second, and never authenticated;
+* the minimum request delay is 500 ms, total duration is at most twelve minutes,
+  and each reviewed active rule receives at most one minute;
+* the baseline spider, passive wait, and active phase are bounded to one, two,
+  and five minutes respectively, with at most five public aggregate alerts per
+  rule; and
+* raw findings are never public.
+
+These JSON values are safety policy, not environment variables. Change them only
+with focused policy, automation, sanitizer, and deployed-target review. A
+public `GET /security-posture` may refresh the passive authored-site snapshot;
+it must never start baseline, active, external-provider, or manual assessment
+work. Owner automation publishes only a sanitized schema-versioned aggregate
+record into the authored JSON contract. Keep raw scanner output in an
+access-controlled private artifact or delete it; never copy it into `src/data`,
+logs, deployment variables, or public CI artifacts.
+
 ## Package scripts
 
 | Command | Exact package expansion | Use and success expectation |
@@ -148,11 +178,13 @@ Use focused commands while diagnosing; run the full suite again afterward:
 
 ```bash
 node --test test/api.test.js
+node --test test/agentManifest.test.js
 node --test test/dataAuthority.test.js
 node --test test/estateObservatory.test.js
 node --test test/github.test.js
 node --test test/security.test.js
 node --test test/securityChecker.test.js
+node --test test/securityPosture.test.js
 node --test test/observatory.test.js
 node --test test/presence.test.js
 node --test test/http.test.js
@@ -175,8 +207,11 @@ earlier green run does not validate later edits.
 | `package-lock.json` | Exact transitive dependency resolution for npm/CI. |
 | `vercel.json` | Vercel function build mapping, catch-all route, production mode, and explicit trusted Vercel client-IP source selection. |
 | `src/data/initialState.json` | Canonical authored portfolio document and ambient ECS world served by `/data` and key routes. |
+| `src/data/securityAssessments.json` | Sanitized, schema-versioned aggregate DAST and pentest publication document; raw findings are forbidden. |
+| `src/data/securityPosturePolicy.json` | Passive fetch capabilities, exact owned assessment allowlist, profiles/states, severity/trend vocabulary, safety caps, cooldown, and reviewed active-rule IDs. |
 | `src/components/observatoryPolicy.js` | Fixed Google endpoints, aggregate metrics, channel identities, and configuration names. |
 | `src/components/securityPolicy.js` | Inert allowed-method/origin/header lists, Helmet policy, and security defaults. |
+| `src/components/securityPosturePolicy.js` | Pure schema/invariant validation plus recursive freeze and named projections of the JSON-authored posture policy. |
 
 Change a value at its owner rather than adding a second environment/config
 source. Any new environment variable must document its default, validation,
@@ -192,22 +227,28 @@ secret classification, runtime consumer, and test coverage here.
 | `src/http.js` | One bounded upstream-fetch effect and positive-duration normalization. |
 | `src/components/observatoryPolicy.js` | Frozen Google observatory policy and fixed public-channel configuration. |
 | `src/components/securityPolicy.js` | Serializable/frozen security policy components and defaults. |
+| `src/components/securityPosturePolicy.js` | Fail-closed validation, recursive freezing, and pure projections for `src/data/securityPosturePolicy.json`. |
 | `src/entities/observatoryStore.js` | Strongest aggregate snapshot, single-flight refresh, explicit stale provenance, and retry cooldown. |
 | `src/entities/presenceStore.js` | Public-presence snapshot, single-flight refresh, stale provenance, and retry cooldown. |
 | `src/entities/rateLimitStore.js` | Factory-scoped RTK request-history entity with normalized clients, event-style observations, bounded LRU ordering, and admission/remaining/reset selectors; callers consume decisions rather than owning store state. |
+| `src/entities/securityPostureStore.js` | RTK-normalized per-site security evidence, serializable snapshot state, single-flight effect ownership, and stale cooldown. |
 | `src/security.js` | Applicative fail-closed configuration, pure Origin/size/method/client-IP/rate decisions, and Helmet → perimeter context → CORS projection → all-request rate → Origin admission → request perimeter → framing → method → OPTIONS composition. |
 | `src/systems/securityPerimeter.js` | Host/target/Origin/media capability decisions, UUID request context, deny-all browser capability headers, and value-free rejection audit events. |
+| `src/systems/agentManifest.js` | Catalog-derived machine resource links, stable schema metadata, safe link relations, and provenance. |
 | `src/systems/estateObservatory.js` | Pure composition of the authored public-site catalog with presence and privacy-safe aggregate evidence. |
 | `src/systems/observatory.js` | OAuth/Google effects, pure aggregate projection, reporting windows, privacy boundary, and availability composition. |
 | `src/systems/presence.js` | Authored-target probes, bounded parallel composition, and state projection. |
+| `src/systems/securityPosture.js` | Authored-only passive observation, defensive-header projection, aggregate assessment sanitizer, public policy projection, and cache orchestration. |
 | `scripts/check-data-authority.js` | Recursive source/JSON authority and route-catalog parity checker, with an optional portfolio RTK Query contract reader. |
 | `scripts/check-security.js` | Frozen policy invariant and candidate secret/file scanner; findings include only path and rule. |
 | `test/api.test.js` | Real ephemeral HTTP-server route, cache-header, authored-contract, readiness, CORS, and error tests. |
+| `test/agentManifest.test.js` | Machine-manifest schema, safe-link, catalog projection, provenance, and fail-closed authority tests. |
 | `test/dataAuthority.test.js` | Live repository authority/parity gate plus focused fixtures for copy drift, executable-config exclusions, catalog failures, and client endpoint extraction. |
 | `test/estateObservatory.test.js` | Site-to-estate projection, honest uninstrumented/unavailable capability state, real evidence preservation, and presence-failure degradation. |
 | `test/github.test.js` | Pure/injected GitHub normalization, contract, cache, single-flight, stale cooldown, all-resource provenance, timeout, partial, commit, and contribution tests. |
 | `test/security.test.js` | Pure policy plus ephemeral HTTP tests for fail-closed configuration, headers, authority, target, Origin, JSON negotiation, request identity, socket/Vercel client keys, CORS, quota-bearing preflight, methods, framing, rate reset/isolation/LRU/invariants, private cache policy, and GET/HEAD behavior. |
 | `test/securityChecker.test.js` | Least-capability policy and redacted secret-scanner behavior. |
+| `test/securityPosture.test.js` | Passive target confinement, header-value privacy, assessment allowlist/sanitization, RTK serializability, single-flight, stale cooldown, and unsafe-target rejection. |
 | `test/observatory.test.js` | Aggregate period/trend normalization, privacy exclusions, configuration, availability, single-flight, strongest-stale preservation, and rejected/weaker cooldowns. |
 | `test/presence.test.js` | Authored-only probing, redirect refusal, classification, cache provenance, stale cooldown, failure reduction, and seven-target bound. |
 | `test/http.test.js` | Signed-32-bit timeout validation and bounded-fetch behavior. |
@@ -261,9 +302,11 @@ deployment dashboard:
 ```bash
 curl -fsS https://api.sdin.dev/status
 curl -fsS https://api.sdin.dev/data
+curl -fsS https://api.sdin.dev/agent-manifest
 curl -fsS https://api.sdin.dev/github
 curl -fsS https://api.sdin.dev/observatory
 curl -fsS https://api.sdin.dev/presence
+curl -fsS https://api.sdin.dev/security-posture
 curl -sS -D - https://api.sdin.dev/definitely-not-a-route -o /dev/null
 ```
 

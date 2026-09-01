@@ -23,6 +23,10 @@ The route families are:
 
 * `/status` for uncached service and authored-data readiness;
 * `/data` for the complete authored portfolio document;
+* `/agent-manifest` for schema-versioned machine discovery, provenance, links,
+  usage policy, and the catalog-derived resource inventory;
+* `/security-posture` for bounded authored-estate observations and sanitized
+  owner-authorized assessment status;
 * one route per non-reserved top-level authored key;
 * `/github` for the aggregate client document;
 * `/observatory` for bounded public aggregate Analytics and Search Console
@@ -74,16 +78,39 @@ Redux endpoint names. The source-wide authority checker compares that catalog
 with the Express route stack so missing, duplicate, orphaned, and method-drifted
 resources fail verification.
 
+`presentation.runtime.agentManifest` owns machine-facing service identity,
+canonical authority, safe link relations, media policy, and rate-header names.
+The `/agent-manifest` system derives its resource collection from the canonical
+resource catalog and adds only observation provenance; it cannot become a
+second manually maintained route list.
+
+`presentation.runtime.securityPosture` owns the public description, defensive
+control rubric, and links. `src/data/securityAssessments.json` is the separate
+schema-versioned authority for deployable sanitized assessment status; scheduled
+owner automation can replace that one aggregate JSON document without rewriting
+portfolio presentation data. `src/data/securityPosturePolicy.json` owns target
+confinement, profiles and states, severity and trend vocabularies, passive effect
+timeouts, scan limits, and reviewed active-rule capabilities. JavaScript only
+validates those values, freezes them recursively, and projects behavior from
+them. Startup and the data-authority gate validate the JSON authorities together
+and fail closed on drift, raw-finding fields, unsafe URLs, or an unsupported
+rubric or capability.
+
 The same checker recursively scans every JavaScript or TypeScript module under
 `src`, requires source JSON to remain under `src/data`, rejects mirrored
 canonical prose and newly embedded presentation-copy bindings, and accumulates
-all violations in one run. Executable schemas, route identifiers, status enums,
-security policy, and upstream configuration remain code rather than being
-misclassified as authored portfolio content.
+all violations in one run. Executable schema mechanics and route behavior remain
+code, while authored presentation, assessment, and security-posture configuration
+remain validated JSON under `src/data`.
 
 `presentation.nexus.presences` is the single public-site catalog for Open Signal
 Channel links, bounded presence probes, and Observatory estate inventory. Every
 site declares presence, Analytics, and Search Console instrumentation capability.
+Each site also owns an explicit repository-attribution array. Entries contain a
+stable ID, canonical public GitHub source URL, and `public-source` status; an
+empty array is an intentional no-attribution state. The estate projection
+carries this authored array verbatim so consumers never infer source ownership
+from domains or display labels.
 The estate projector carries real aggregate and presence evidence when it
 exists, reports `unavailable` or `unconfigured` when configured instrumentation
 has no evidence, and reports `not-instrumented` for capabilities with no
@@ -109,6 +136,7 @@ Current portfolio resource ownership is:
 | Service | `GET /status` | `getApiStatus` document cache |
 | Observatory | `GET /observatory` | `getObservatory` document cache |
 | Presence | `GET /presence` | `getPresence` document cache |
+| Security posture | `GET /security-posture` | `getSecurityPosture` document cache |
 
 This table documents client ownership; the JSON catalog remains portable to any
 consumer framework. Cross-repository validation reads the portfolio API
@@ -146,14 +174,19 @@ The physical modules apply those roles at compact scale:
 | `src/http.js` | Bounded upstream-fetch effect. |
 | `src/components/observatoryPolicy.js` | Frozen Google endpoint, metric, channel, and configuration contracts. |
 | `src/components/securityPolicy.js` | Inert frozen security methods, origins, headers, defaults, and Helmet policy. |
+| `src/data/securityPosturePolicy.json` | Exact passive/assessment target, vocabulary, rate, cooldown, duration, privacy, and active-rule capabilities. |
+| `src/components/securityPosturePolicy.js` | Pure fail-closed schema/invariant validation, recursive freeze, and named policy projections. |
 | `src/entities/observatoryStore.js` | Loss-averse observatory snapshot, single-flight refresh, and stale provenance. |
 | `src/entities/presenceStore.js` | Bounded public-presence snapshot and single-flight refresh. |
 | `src/entities/rateLimitStore.js` | Factory-scoped RTK client-history authority with normalized entities, event reducers, bounded LRU order, and decision selectors. |
+| `src/entities/securityPostureStore.js` | RTK-normalized per-site evidence, serializable snapshot metadata, single-flight refresh, and stale cooldown provenance. |
 | `src/security.js` | Security decisions and HTTP middleware-system composition. |
 | `src/systems/securityPerimeter.js` | Separate least-capability request perimeter for authority, target, Origin, representation, response capabilities, request identity, and rejection auditing. |
+| `src/systems/agentManifest.js` | Pure catalog-to-resource-link projection and machine-readable provenance. |
 | `src/systems/estateObservatory.js` | Pure site-catalog join across public presence and aggregate Observatory evidence. |
 | `src/systems/observatory.js` | Google effect orchestration and privacy-preserving aggregate projections. |
 | `src/systems/presence.js` | Authored-target probing, state classification, and summary projection. |
+| `src/systems/securityPosture.js` | Exact-authored-target passive observation, defensive-evidence projection, aggregate assessment sanitization, and posture orchestration. |
 | `src/data/initialState.json` | Inert authored component data. |
 | `scripts/check-data-authority.js` | Recursive authored-copy, JSON-location, Express/catalog, and optional portfolio-client contract audit. |
 
@@ -175,6 +208,15 @@ The service is an intentional production consumer of
 projections. Use the weakest lawful abstraction and keep fetch/token work at
 the system boundary. The TypeScript lectures may link to these source examples;
 the runtime never depends on curriculum content.
+
+The security-posture entity uses Redux Toolkit because the serializable
+observation snapshot is shared durable process state: `createEntityAdapter`
+normalizes sites, event-style reducers own snapshot/stale transitions, and
+selectors reconstruct the public document. The in-flight Promise, fetch,
+timeout signal, and clock stay outside Redux. This preserves RTK's event →
+reducer → selector data flow without placing a non-serializable capability in
+state. Pure FP projections evaluate controls, weighted coverage, aggregate
+severity, trends, and public allowlists before the Express effect boundary.
 
 Per-instance services may close over cache state because the cache is an entity
 owned by that service instance. Factories accept effects once at the boundary,
@@ -297,6 +339,12 @@ stage and report stage each have a 2.5-second default timeout, keeping their
 sequential worst case comfortably inside the portfolio's eight-second request
 budget.
 
+Every estate projects its API-authored `repositories` attribution. The array is
+never joined from live GitHub results or inferred from a hostname: it contains
+only stable IDs, canonical public source URLs, and `public-source` status from
+the site catalog. Exact catalog/projection parity is a verification invariant,
+including intentional empty arrays.
+
 Raw queries, path-level records, countries, visitor dimensions, Google property
 identifiers, OAuth material, transport diagnostics, and access tokens must not
 cross the response boundary. Daily series contain dates and aggregate metrics
@@ -312,6 +360,85 @@ never follow redirects, and reduce results to `operational`, `limited`, or
 in-flight refresh prevent an interface poll from multiplying outbound work.
 If a refresh rejects after a usable snapshot exists, the retained stale value
 receives a fresh cooldown before another probe fan-out is eligible.
+
+## Digital-estate security posture contract
+
+`/security-posture` is an observatory, not a targetable scanner. Its passive
+system accepts no request parameters and probes only the exact public HTTPS
+destinations already owned by `presentation.nexus.presences`. Construction
+rejects IP literals, local names, credentials, non-default ports, duplicate
+destinations, and catalogs above the fixed twelve-site ceiling. Each effect is
+a time-bounded `HEAD` with `redirect: manual`; no response body, redirect
+destination, certificate detail, server fingerprint, or raw header value enters
+the public component.
+
+The FP core reduces safe Fetch evidence into an eight-control rubric:
+encrypted transport, positive HSTS, CSP, frame protection, `nosniff`, a
+recognized referrer policy, permissions policy, and COOP/COEP cross-origin
+isolation. A control is only `present`, `missing`, or `unavailable`. Weighted
+coverage reports what this observation saw and must never be named a
+certification, compliance grade, vulnerability result, or proof that a site is
+secure. A successful HTTPS Fetch proves only that the runtime completed that
+transport; the API does not invent TLS versions, certificate metadata, or
+server-side state unavailable to Fetch.
+
+One RTK entity store owns the normalized serializable site snapshot and cache
+metadata. Exactly one in-flight refresh exists outside Redux. Fresh readers use
+the cached snapshot; if a refresh-level failure follows a usable value, that
+value is returned with `cached: true`, `stale: true`, and a renewed cooldown.
+Per-site transport faults are ordinary `unavailable` evidence and never expose
+the underlying exception.
+
+External assessment publication is a separate trust zone. The public GET never
+starts Sucuri, ZAP, another provider, or a manual pentest. Owner-controlled
+automation may assess only `https://portfolio.sdin.dev` and
+`https://api.sdin.dev`; JSON-authored, fail-closed policy permits one target at
+a time, at most one run per target per day, at most two requests per second, a
+500 ms minimum delay, twelve total minutes, one minute per active rule, and a
+fixed reviewed active-rule allowlist. Authenticated scanning remains disabled.
+These limits are capabilities, not request-time options, and public callers
+cannot widen them.
+
+The `src/data/securityAssessments.json` input boundary accepts only document
+schema/state/update time plus per-target schema version, assessment ID,
+exact target tuple, profile, active flag, observation/expiry time, state,
+five aggregate severity counts, aggregate coverage, policy-parity limits,
+provider, and aggregate trend. It recomputes `alertsTotal`, projects only the
+allowlist, marks expired evidence from `validUntil`, and always emits
+`rawFindingsPublic: false`. Any finding title, URL/path, parameter, payload,
+request/response sample, cookie, token, stack trace, remediation note, or other
+unrecognized field aborts startup instead of entering the public document.
+The serverless ingestion path is an owner-only scheduled workflow that validates
+and atomically replaces this one sanitized file, commits it, and lets deployment
+publish the new immutable snapshot. There is no assessment POST endpoint and no
+ephemeral function-instance write pretending to be durable state.
+Unavailable assessments use `null` counts; zero means a completed assessment
+measured zero alerts at that severity.
+
+This separation follows the official guidance rather than overstating remote
+coverage. [Sucuri SiteCheck](https://sitecheck.sucuri.net/) says its remote view
+is limited to browser-visible evidence and cannot detect server-side findings.
+The official [ZAP Baseline Scan](https://www.zaproxy.org/docs/docker/baseline-scan/)
+is short-lived spidering followed by passive analysis and performs no active
+attacks. ZAP's
+[Automation Framework](https://www.zaproxy.org/docs/automate/automation-framework/)
+separates passive-wait and active-scan jobs, while its
+[alert-job guidance](https://www.zaproxy.org/docs/desktop/addons/automation-framework/test-alert/)
+explicitly states that active scanning attacks a target and requires
+permission. Provider output therefore enters only through separately
+authorized automation and this API's aggregate sanitizer.
+
+## Machine discovery contract
+
+`/agent-manifest` is the stable JSON entry point for automated consumers. Its
+schema version, canonical base URL, service description, safe link relations,
+read-only/no-auth policy, response media type, and rate-limit header names are
+API-authored JSON. The resource array is derived from the same catalog checked
+against Express, with an absolute `href` and stable `rel` for every method/path.
+Each response includes an observation timestamp and `/data` provenance. No
+secret, private assessment detail, raw report location, or undocumented route
+may appear. Textual crawler artifacts may link here, but they do not replace
+the JSON authority.
 
 ## Security boundary
 
@@ -456,7 +583,14 @@ The deterministic suite must cover:
 * authored-only presence probing, seven-target enforcement, classification,
   cache provenance, and redirect refusal;
 * public-site schema, Google instrumentation-policy ownership, exact
-  channel/estate destination parity, and non-fabricated capability states;
+  channel/estate destination and repository-attribution parity, and
+  non-fabricated capability states;
+* security-posture catalog confinement, unsafe-target rejection, passive
+  method/redirect/body limits, pure header-state projection, RTK
+  normalization, single-flight, stale cooldown, sanitized severity/trend, and
+  raw-finding rejection;
+* agent-manifest definition validation, catalog-derived links, schema and
+  provenance fields, and route/catalog parity;
 * single-flight, live, cached, stale, partial, and unavailable states;
 * complete-stale preservation across a partial refresh;
 * timeout classification and contribution degradation;
@@ -483,13 +617,16 @@ A candidate is production-verified only after the active deployed service shows:
 2. complete authored data and focused content routes;
 3. valid live/cached/stale/partial GitHub response semantics;
 4. honest aggregate observatory and bounded presence responses, including
-   privacy exclusions and stale/unconfigured semantics;
-5. expected private-revalidation and security headers;
-6. JSON 404, unsupported-method, oversized-request, and rate-limit responses;
-7. allowed-origin CORS and explicit denied-origin behavior;
-8. authority, target, Accept, Content-Type, and request-ID perimeter behavior;
-9. no leaked secret, raw error, or stack/internal path; and
-10. successful portfolio consumption of the same deployment.
+   privacy exclusions, repository attribution, and stale/unconfigured semantics;
+5. the schema-versioned agent manifest and catalog-derived resource links;
+6. bounded security-posture evidence with exact authored targets, cache/stale
+   provenance, and no raw assessment details;
+7. expected private-revalidation and security headers;
+8. JSON 404, unsupported-method, oversized-request, and rate-limit responses;
+9. allowed-origin CORS and explicit denied-origin behavior;
+10. authority, target, Accept, Content-Type, and request-ID perimeter behavior;
+11. no leaked secret, raw error, or stack/internal path; and
+12. successful portfolio consumption of the same deployment.
 
 Local suite success, source push, platform deployment, and production HTTP
 verification are separate milestones and must be reported separately.

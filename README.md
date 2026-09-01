@@ -15,6 +15,8 @@ header-only checks, and a valid CORS preflight receives an empty `204`.
 | `GET` | `/` | Service readiness message. |
 | `GET` | `/status` | Current service version, check time, and authored-data readiness. |
 | `GET` | `/data` | Complete authored registry document. |
+| `GET` | `/agent-manifest` | Self-describing resource catalog, provenance, safe link relations, and usage policy for automated clients. |
+| `GET` | `/security-posture` | Bounded passive defensive-header observations plus sanitized authorized-assessment status for the authored digital estate. |
 | `GET` | `/observatory` | Public aggregate Analytics and Search Console measurements and trends. |
 | `GET` | `/presence` | Bounded reachability and latency observations for API-authored public channels. |
 | `GET` | `/<content-key>` | One named top-level value from the authored document. |
@@ -106,6 +108,42 @@ latency, and check time; it does not claim traffic, audience, or conversion data
 that the public source cannot prove. A retained stale snapshot also receives a
 cooldown before another outbound probe set is eligible.
 
+## Digital-estate security posture
+
+`/security-posture` performs one bounded `HEAD` observation for each exact HTTPS
+destination in `presentation.nexus.presences`. It never accepts a caller target,
+never follows redirects, never reads a response body, never probes a private or
+IP-literal destination, and briefly caches one normalized RTK snapshot. A
+transport failure becomes an `unavailable` observation without DNS, TLS, socket,
+or exception details.
+
+The response reports only `present`, `missing`, or `unavailable` control states
+for encrypted transport, HSTS, CSP, frame protection, content-type protection,
+referrer policy, permissions policy, and cross-origin isolation. Header values,
+certificate details, response bodies, redirect destinations, and server
+fingerprints are not public. Coverage is evidence from one remote observation,
+not a guarantee or security certification.
+
+Authorized external, baseline, active-DAST, and manual-pentest results use a
+separate aggregate contract. Public reads cannot start those assessments. The
+fixed active allowlist contains only `https://portfolio.sdin.dev` and
+`https://api.sdin.dev`; execution belongs to an owner-controlled CI/CLI lane
+with one target at a time, a daily target cooldown, request-rate and duration
+bounds, and no authenticated scan. The public API returns sanitized target,
+profile, provider, observation/expiry time, severity counts, coverage, and trend
+only. Raw alerts, paths, payloads, request/response evidence, and remediation
+detail remain private. When no authorized result is published, counts are
+`null`, not truthful-looking zeroes.
+
+## Machine-readable discovery
+
+`/agent-manifest` projects `presentation.runtime.resourceCatalog` into absolute
+resource links. It includes a schema version, observation time, `/data`
+provenance, JSON media type, read-only/no-auth usage policy, rate-limit header
+names, and safe relations for the portfolio, source, documentation, authored
+data, and security posture. Automated clients should discover routes here
+instead of scraping the human README or the `404` recovery payload.
+
 ## Impact observatory
 
 `/observatory` publishes aggregate Google Analytics and Search Console signals
@@ -119,6 +157,11 @@ defer the next Google fan-out for one cache interval.
 OAuth credentials, Google property identifiers, raw search queries, visitor
 dimensions, countries, path-level records, and upstream diagnostics never enter the public
 response. Short-lived access tokens stay inside the server-side effect boundary.
+
+Every `observatory.estates` record also carries the API-authored `repositories`
+array for that site. Each attribution has a stable ID, canonical public GitHub
+source URL, and `public-source` status; an empty array explicitly means that no
+repository has been attributed. Clients do not infer ownership from hostnames.
 
 ## Error responses
 

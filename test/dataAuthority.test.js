@@ -23,11 +23,11 @@ describe('API-authored data authority', () => {
     const audit = repositoryAudit(repoRoot);
 
     assert.deepEqual(audit.issues, []);
-    assert.equal(audit.catalog.resources.length, 22);
-    assert.equal(implementedRoutesOf(app).length, 22);
+    assert.equal(audit.catalog.resources.length, 24);
+    assert.equal(implementedRoutesOf(app).length, 24);
     assert.equal(
       audit.catalog.resources.filter((resource) => resource.portfolio).length,
-      6
+      7
     );
   });
 
@@ -50,7 +50,7 @@ describe('API-authored data authority', () => {
     assert.match(embeddedCopyIssues(embedded)[0].detail, /embeds presentation copy/);
   });
 
-  test('preserves executable identifiers, status constants, and policy configuration as code', () => {
+  test('preserves executable identifiers and protocol mechanics as code', () => {
     const executableConfiguration = [{
       relativePath: 'src/components/policy.js',
       source: [
@@ -103,6 +103,7 @@ describe('API-authored data authority', () => {
         getApiStatus: builder.query<ApiStatus, void>({ query: () => '/status' }),
         getObservatory: builder.query<Observatory, void>({ query: () => '/observatory' }),
         getPresence: builder.query<Presence, void>({ query: () => '/presence' }),
+        getSecurityPosture: builder.query<SecurityPosture, void>({ query: () => '/security-posture' }),
       })
     `;
     const parsed = parsePortfolioEndpoints(portfolioApi);
@@ -115,6 +116,7 @@ describe('API-authored data authority', () => {
       { method: 'GET', path: '/status' },
       { method: 'GET', path: '/observatory' },
       { method: 'GET', path: '/presence' },
+      { method: 'GET', path: '/security-posture' },
     ]);
   });
 
@@ -125,18 +127,24 @@ describe('API-authored data authority', () => {
         label: 'sdin.dev',
         url: 'https://sdin.dev',
         capabilities: { presence: true, analytics: true, searchConsole: true },
+        repositories: [{
+          id: 'seandinwiddie-portfolio',
+          sourceUrl: 'https://github.com/seandinwiddie/portfolio',
+          status: 'public-source',
+        }],
       },
       {
         id: 'lectures',
         label: 'Lectures',
         url: 'https://example.com/lectures',
         capabilities: { presence: false, analytics: false, searchConsole: false },
+        repositories: [],
       },
     ];
     const estates = [
-      { id: 'registry', url: 'https://wrong.example' },
-      { id: 'orphan', url: 'https://orphan.example' },
-      { id: 'orphan', url: 'https://orphan.example' },
+      { id: 'registry', url: 'https://wrong.example', repositories: [] },
+      { id: 'orphan', url: 'https://orphan.example', repositories: [] },
+      { id: 'orphan', url: 'https://orphan.example', repositories: [] },
     ];
     const schemaDetails = siteCatalogIssues(sites).map(({ detail }) => detail);
     const parityDetails = estateParityIssues(sites, estates).map(({ detail }) => detail);

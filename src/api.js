@@ -2,22 +2,33 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const github = require('./github');
+const { createAgentManifestService } = require('./systems/agentManifest');
 const { createEstateObservatoryService } = require('./systems/estateObservatory');
 const { createObservatoryService } = require('./systems/observatory');
 const { createPresenceService } = require('./systems/presence');
+const { createSecurityPostureService } = require('./systems/securityPosture');
 const { createSecurityMiddleware } = require('./security');
 const { version } = require('../package.json');
 
 const port = process.env.PORT || 3000;
 const initialStateFile = path.join(__dirname, 'data', 'initialState.json');
+const securityAssessmentsFile = path.join(
+  __dirname,
+  'data',
+  'securityAssessments.json'
+);
 
-let initialState;
-try {
-  initialState = JSON.parse(fs.readFileSync(initialStateFile, 'utf8'));
-} catch (error) {
-  console.error(`Failed to load ${initialStateFile}:`, error.message);
-  throw new Error(`Cannot start API: ${initialStateFile} is missing or invalid JSON`);
-}
+const loadRequiredJson = (filePath) => {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    console.error(`Failed to load ${filePath}:`, error.message);
+    throw new Error(`Cannot start API: ${filePath} is missing or invalid JSON`);
+  }
+};
+
+const initialState = loadRequiredJson(initialStateFile);
+const securityAssessments = loadRequiredJson(securityAssessmentsFile);
 
 const revalidatePrivately = (req, res, next) => {
   res.set('Cache-Control', 'private, no-cache, max-age=0, must-revalidate');
@@ -58,17 +69,22 @@ const observatory = createObservatoryService({
 const RESERVED_PATHS = new Set([
   '',
   'status',
+  'agent-manifest',
   'data',
   'github',
   'observatory',
   'presence',
+  'security-posture',
 ]);
 
 /** Express boundary with injectable GitHub and clock effects for deterministic tests. */
 const createApp = ({
   githubService = github,
+  agentManifestService,
   observatoryService = observatory,
   presenceService = presence,
+  securityPostureService,
+  securityAssessmentDocument = securityAssessments,
   siteCatalog = initialState.presentation.nexus.presences,
   logger = console,
   now = Date.now,
@@ -79,6 +95,17 @@ const createApp = ({
     sites: siteCatalog,
     observatoryService,
     presenceService,
+  });
+  const manifestService = agentManifestService ?? createAgentManifestService({
+    definition: initialState.presentation.runtime.agentManifest,
+    resourceCatalog: initialState.presentation.runtime.resourceCatalog,
+    now,
+  });
+  const postureService = securityPostureService ?? createSecurityPostureService({
+    sites: siteCatalog,
+    definition: initialState.presentation.runtime.securityPosture,
+    assessment: securityAssessmentDocument,
+    now,
   });
   app.disable('x-powered-by');
   app.set('trust proxy', false);
@@ -100,6 +127,8 @@ const createApp = ({
       authoredData: {
         status: 'ready',
         keys: Object.keys(initialState).length,
+        securityAssessments: 'ready',
+        securityPosturePolicy: 'ready',
       },
     });
   });
@@ -107,6 +136,8 @@ const createApp = ({
   app.get('/data', (req, res) => {
     res.json(initialState);
   });
+
+  app.get('/agent-manifest', jsonRoute(manifestService.getSummary));
 
   const githubRoutes = {
     '/github': githubService.getSummary,
@@ -123,6 +154,7 @@ const createApp = ({
 
   app.get('/presence', jsonRoute(presenceService.getSummary));
   app.get('/observatory', jsonRoute(estateObservatoryService.getSummary));
+  app.get('/security-posture', jsonRoute(postureService.getSummary));
 
   Object.keys(initialState).forEach((key) => {
     if (RESERVED_PATHS.has(key)) {
@@ -137,9 +169,11 @@ const createApp = ({
   const availableEndpoints = () => [
     '/',
     '/status',
+    '/agent-manifest',
     '/data',
     '/observatory',
     '/presence',
+    '/security-posture',
     ...Object.keys(githubRoutes),
     ...Object.keys(initialState)
       .filter((key) => !RESERVED_PATHS.has(key))

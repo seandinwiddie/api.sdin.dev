@@ -12,6 +12,14 @@ const {
   REQUIRED_HOSTS,
   REQUIRED_ORIGINS,
 } = require('../src/components/securityPolicy');
+const {
+  AUTHORIZED_ASSESSMENT_POLICY,
+  AUTHORIZED_DAST_TARGETS,
+  MAX_SECURITY_POSTURE_TARGETS,
+  PASSIVE_SECURITY_POSTURE_POLICY,
+  SECURITY_POSTURE_POLICY,
+  securityPosturePolicyIssues,
+} = require('../src/components/securityPosturePolicy');
 const { securityPolicyFrom } = require('../src/security');
 
 const secretSignatures = Object.freeze([
@@ -71,7 +79,31 @@ const policyFindings = () => {
     ['request-target-bound', defaultPolicy.maxRequestTargetBytes <= 8_192],
     ['rate-window-bound', defaultPolicy.rateLimit.limit <= 1_000],
     ['rate-state-bound', defaultPolicy.rateLimit.maxClients <= 100_000],
+    ['posture-json-policy-valid', securityPosturePolicyIssues(SECURITY_POSTURE_POLICY)
+      .length === 0],
+    ['posture-target-bound', MAX_SECURITY_POSTURE_TARGETS <= 12],
+    ['posture-bodyless-fetch', PASSIVE_SECURITY_POSTURE_POLICY.method === 'HEAD' &&
+      PASSIVE_SECURITY_POSTURE_POLICY.responseBodiesRead === false],
+    ['posture-no-redirect', PASSIVE_SECURITY_POSTURE_POLICY.redirect === 'manual'],
+    ['assessment-public-trigger-denied', AUTHORIZED_ASSESSMENT_POLICY.publicTrigger === false],
+    ['assessment-raw-findings-private', AUTHORIZED_ASSESSMENT_POLICY.rawFindingsPublic === false],
+    ['assessment-target-allowlist', sameValues(
+      AUTHORIZED_DAST_TARGETS.map(({ origin }) => origin)
+    )(['https://portfolio.sdin.dev', 'https://api.sdin.dev'])],
+    ['assessment-target-concurrency', AUTHORIZED_ASSESSMENT_POLICY.maxConcurrentTargets === 1],
+    ['assessment-daily-bound', AUTHORIZED_ASSESSMENT_POLICY.maxRunsPerTargetPerDay <= 1],
+    ['assessment-request-rate', AUTHORIZED_ASSESSMENT_POLICY.maxRequestsPerSecond <= 2],
+    ['assessment-delay-rate-parity', AUTHORIZED_ASSESSMENT_POLICY.delayMs >=
+      Math.ceil(1000 / AUTHORIZED_ASSESSMENT_POLICY.maxRequestsPerSecond)],
+    ['assessment-duration-bound', AUTHORIZED_ASSESSMENT_POLICY.maxDurationMinutes <= 15],
+    ['assessment-cooldown', AUTHORIZED_ASSESSMENT_POLICY.cooldownMs >= 86_400_000],
+    ['assessment-rule-bound', AUTHORIZED_ASSESSMENT_POLICY.activeRuleIds.length <= 8],
     ['frozen-policy', Object.isFrozen(defaultPolicy) && Object.isFrozen(defaultPolicy.rateLimit)],
+    ['frozen-assessment-policy', Object.isFrozen(AUTHORIZED_ASSESSMENT_POLICY) &&
+      Object.isFrozen(AUTHORIZED_DAST_TARGETS) &&
+      Object.isFrozen(AUTHORIZED_ASSESSMENT_POLICY.activeRuleIds) &&
+      Object.isFrozen(SECURITY_POSTURE_POLICY) &&
+      Object.isFrozen(PASSIVE_SECURITY_POSTURE_POLICY)],
   ];
 
   return checks

@@ -13,12 +13,18 @@ const sites = [
     label: 'sdin.dev',
     url: 'https://sdin.dev',
     capabilities: { presence: true, analytics: true, searchConsole: true },
+    repositories: [{
+      id: 'seandinwiddie-portfolio',
+      sourceUrl: 'https://github.com/seandinwiddie/portfolio',
+      status: 'public-source',
+    }],
   },
   {
     id: 'lectures',
     label: 'Lectures',
     url: 'https://seandinwiddie.github.io/lectures/',
     capabilities: { presence: true, analytics: false, searchConsole: false },
+    repositories: [],
   },
 ];
 
@@ -57,6 +63,12 @@ describe('estate observatory composition', () => {
       result.estates[0].capabilities.analytics.realtime.activeUsers,
       3
     );
+    assert.deepEqual(result.estates[0].repositories, [{
+      id: 'seandinwiddie-portfolio',
+      sourceUrl: 'https://github.com/seandinwiddie/portfolio',
+      status: 'public-source',
+    }]);
+    assert.deepEqual(result.estates[1].repositories, []);
     assert.equal(
       result.estates[0].capabilities.searchConsole.availability,
       'unconfigured'

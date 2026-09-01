@@ -73,10 +73,39 @@ const observatoryService = {
   }),
 };
 
+const securityPostureService = {
+  getSummary: async () => ({
+    schemaVersion: '1.0.0',
+    kind: 'digital-estate-security-posture',
+    checkedAt: '2026-08-30T04:00:00.000Z',
+    cached: false,
+    stale: false,
+    scope: { userSuppliedTargetsAccepted: false },
+    posture: { targets: 6, observed: 6, unavailable: 0, coveragePercent: 84 },
+    sites: [],
+    assessments: {
+      schemaVersion: 1,
+      state: 'not-published',
+      severityCounts: null,
+      alertsTotal: null,
+      records: [],
+      policy: { publicTrigger: false, rawFindingsPublic: false },
+    },
+    links: [],
+    provenance: {
+      authority: 'api-authored-json-and-runtime-observation',
+      observedAt: '2026-08-30T04:00:00.000Z',
+      cached: false,
+      stale: false,
+    },
+  }),
+};
+
 const app = createApp({
   githubService,
   observatoryService,
   presenceService,
+  securityPostureService,
   now: () => Date.parse('2026-08-30T04:00:00Z'),
 });
 
@@ -127,6 +156,8 @@ describe('api.sdin.dev', () => {
     assert.equal(body.checkedAt, '2026-08-30T04:00:00.000Z');
     assert.equal(body.authoredData.status, 'ready');
     assert.equal(body.authoredData.keys, Object.keys(initialState).length);
+    assert.equal(body.authoredData.securityAssessments, 'ready');
+    assert.equal(body.authoredData.securityPosturePolicy, 'ready');
     assert.match(headers.get('cache-control'), /no-store/);
   });
 
@@ -134,6 +165,33 @@ describe('api.sdin.dev', () => {
     const { status, body } = await get('/data');
     assert.equal(status, 200);
     assert.deepEqual(Object.keys(body).sort(), Object.keys(initialState).sort());
+  });
+
+  test('GET /agent-manifest returns catalog-derived machine discovery', async () => {
+    const { status, body } = await get('/agent-manifest');
+    assert.equal(status, 200);
+    assert.equal(body.kind, 'public-api-manifest');
+    assert.equal(body.observedAt, '2026-08-30T04:00:00.000Z');
+    assert.equal(body.usage.readOnly, true);
+    assert.ok(
+      body.resources.some(
+        ({ method, path }) => method === 'GET' && path === '/security-posture'
+      )
+    );
+    assert.equal(
+      body.links.find(({ rel }) => rel === 'portfolio').href,
+      'https://portfolio.sdin.dev'
+    );
+  });
+
+  test('GET /security-posture returns sanitized public evidence without a scan trigger', async () => {
+    const { status, body } = await get('/security-posture?target=https://attacker.example');
+    assert.equal(status, 200);
+    assert.equal(body.kind, 'digital-estate-security-posture');
+    assert.equal(body.scope.userSuppliedTargetsAccepted, false);
+    assert.equal(body.assessments.policy.publicTrigger, false);
+    assert.equal(body.assessments.policy.rawFindingsPublic, false);
+    assert.equal(JSON.stringify(body).includes('attacker.example'), false);
   });
 
   test('GET /observatory returns the public aggregate observatory', async () => {
@@ -158,6 +216,14 @@ describe('api.sdin.dev', () => {
       body.estates.find(({ id }) => id === 'forboc').capabilities.analytics
         .availability,
       'not-instrumented'
+    );
+    assert.deepEqual(
+      body.estates.find(({ id }) => id === 'registry').repositories,
+      [{
+        id: 'seandinwiddie-portfolio',
+        sourceUrl: 'https://github.com/seandinwiddie/portfolio',
+        status: 'public-source',
+      }]
     );
   });
 
@@ -287,6 +353,7 @@ describe('api.sdin.dev', () => {
         url: 'https://forboc.ai',
         label: 'Forboc.ai',
         capabilities: { presence: true, analytics: false, searchConsole: false },
+        repositories: [],
       }
     );
     assert.deepEqual(
@@ -296,6 +363,11 @@ describe('api.sdin.dev', () => {
         url: 'https://seandinwiddie.github.io/lectures/',
         label: 'Lectures',
         capabilities: { presence: true, analytics: false, searchConsole: false },
+        repositories: [{
+          id: 'seandinwiddie-lectures',
+          sourceUrl: 'https://github.com/seandinwiddie/lectures',
+          status: 'public-source',
+        }],
       }
     );
     assert.deepEqual(
@@ -307,6 +379,11 @@ describe('api.sdin.dev', () => {
         url: 'https://www.npmjs.com/package/functional-programming-composition',
         label: 'Functional Programming Library',
         capabilities: { presence: true, analytics: false, searchConsole: false },
+        repositories: [{
+          id: 'functional-programming-composition-fp',
+          sourceUrl: 'https://github.com/functional-programming-composition/fp',
+          status: 'public-source',
+        }],
       }
     );
     assert.ok(Array.isArray(body.presentation.utilityRail.links));
@@ -394,6 +471,8 @@ describe('api.sdin.dev', () => {
     assert.ok(body.availableEndpoints.includes('/github/contributions'));
     assert.ok(body.availableEndpoints.includes('/github/commits'));
     assert.ok(body.availableEndpoints.includes('/presence'));
+    assert.ok(body.availableEndpoints.includes('/security-posture'));
+    assert.ok(body.availableEndpoints.includes('/agent-manifest'));
   });
 
   test('unknown routes return JSON, not an HTML error document', async () => {

@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "passive": {
+    "maxTargets": 12,
+    "cacheTtlMs": 300000,
+    "requestTimeoutMs": 4000,
+    "method": "HEAD",
+    "redirect": "manual",
+    "credentials": "omit",
+    "cache": "no-store",
+    "accept": "text/html,application/xhtml+xml",
+    "userAgent": "api.sdin.dev-security-posture-observer",
+    "responseBodiesRead": false
+  },
+  "controls": [
+    "encrypted-transport",
+    "strict-transport-security",
+    "content-security-policy",
+    "frame-protection",
+    "content-type-options",
+    "referrer-policy",
+    "permissions-policy",
+    "cross-origin-isolation"
+  ],
+  "assessment": {
+    "profiles": [
+      "external-passive",
+      "baseline",
+      "active",
+      "manual-pentest"
+    ],
+    "activeProfile": "active",
+    "recordStates": [
+      "not-published",
+      "complete",
+      "degraded",
+      "unavailable",
+      "expired",
+      "failed"
+    ],
+    "documentStates": [
+      "not-published",
+      "published"
+    ],
+    "emptyDocumentState": "not-published",
+    "publishedDocumentState": "published",
+    "expirableStates": [
+      "complete",
+      "degraded"
+    ],
+    "expiredState": "expired",
+    "noEvidenceStates": [
+      "not-published",
+      "unavailable",
+      "failed"
+    ],
+    "severities": [
+      "critical",
+      "high",
+      "medium",
+      "low",
+      "informational"
+    ],
+    "trendDirections": [
+      "improving",
+      "stable",
+      "worsening",
+      "unavailable"
+    ],
+    "unavailableTrendDirection": "unavailable",
+    "executionBoundary": "owner-ci-cli-only",
+    "publicTrigger": false,
+    "rawFindingsPublic": false,
+    "maxConcurrentTargets": 1,
+    "maxRunsPerTargetPerDay": 1,
+    "maxRequestsPerSecond": 2,
+    "maxDurationMinutes": 12,
+    "maxRuleDurationMinutes": 1,
+    "delayMs": 500,
+    "baselineSpiderMinutes": 1,
+    "passiveWaitMinutes": 2,
+    "activeScanMinutes": 5,
+    "maxAlertsPerRule": 5,
+    "attackStrength": "LOW",
+    "authenticated": false,
+    "cooldownMs": 86400000,
+    "authorizedTargets": [
+      {
+        "id": "portfolio",
+        "origin": "https://portfolio.sdin.dev"
+      },
+      {
+        "id": "api",
+        "origin": "https://api.sdin.dev"
+      }
+    ],
+    "activeRuleIds": [
+      "20019",
+      "40003",
+      "40012",
+      "40018",
+      "40040"
+    ]
+  }
+}

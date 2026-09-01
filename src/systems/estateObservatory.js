@@ -41,6 +41,12 @@ const presenceCapability = (instrumented, observation) =>
         checkedAt: null,
       });
 
+const repositoryAttribution = (repository) => Object.freeze({
+  id: repository.id,
+  sourceUrl: repository.sourceUrl,
+  status: repository.status,
+});
+
 const estateFrom = (sources) => (site) => {
   const property = sources.properties[site.id];
   const presence = sources.presence[site.id];
@@ -48,6 +54,9 @@ const estateFrom = (sources) => (site) => {
     id: site.id,
     label: site.label,
     url: site.url,
+    repositories: Object.freeze(
+      (site.repositories ?? []).map(repositoryAttribution)
+    ),
     capabilities: Object.freeze({
       presence: presenceCapability(site.capabilities.presence, presence),
       analytics: observedCapability(
