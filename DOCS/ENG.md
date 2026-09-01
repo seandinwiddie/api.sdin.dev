@@ -52,6 +52,11 @@ readiness all project this same in-memory document.
 exactly `Portfolio.sdin.dev`. Lore-oriented registry names remain presentation
 metadata and must not replace that public product identity.
 
+`presentation.runtime.sound` owns the sound control's visible enabled/disabled
+copy and its action-oriented accessibility labels. The portfolio client owns
+the serializable visitor preference and gesture-gated audio effect; those
+runtime concerns must not be mirrored into authored API data.
+
 Reserved route names cannot be shadowed by authored keys. A collision must be
 reported and skipped at composition rather than changing the meaning of a
 built-in route.

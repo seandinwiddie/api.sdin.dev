@@ -295,6 +295,12 @@ describe('api.sdin.dev', () => {
       ['dossier', 'ingress', 'lostSignal', 'missions', 'nexus', 'telemetry']
     );
     assert.equal(typeof body.presentation.lostSignal.actionLabel, 'string');
+    assert.deepEqual(body.presentation.runtime.sound, {
+      enabledText: 'SOUND ON',
+      disabledText: 'SOUND OFF',
+      enableLabel: 'Enable interface sounds',
+      disableLabel: 'Disable interface sounds',
+    });
     assert.equal(typeof body.presentation.runtime.navigation.routes.nexus.label, 'string');
     assert.equal(typeof body.presentation.runtime.archiveControl.commands.help[0], 'string');
     assert.equal(typeof body.presentation.runtime.dossier.stats.repositories, 'string');

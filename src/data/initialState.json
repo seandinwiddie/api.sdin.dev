@@ -257,6 +257,12 @@
       "actionLabel": "Return to the registry"
     },
     "runtime": {
+      "sound": {
+        "enabledText": "SOUND ON",
+        "disabledText": "SOUND OFF",
+        "enableLabel": "Enable interface sounds",
+        "disableLabel": "Disable interface sounds"
+      },
       "errorBoundary": {
         "headline": "Registry signal interrupted",
         "message": "Signal interrupted. The registry remains intact; retry the link.",
